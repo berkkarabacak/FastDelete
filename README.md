@@ -33,7 +33,7 @@ as Windows Explorer.
 
 ## Download
 
-Grab `FastDelete-v0.4.0-win-x64.zip` from the
+Grab `FastDelete-v0.4.1-win-x64.zip` from the
 [Releases page](https://github.com/berkkarabacak/FastDelete/releases) — no installation
 needed, works on Windows 10/11 x64. Start `FastDelete.exe` (or drag a folder onto
 `FastDelete.cmd`).
@@ -48,7 +48,7 @@ FastDelete.exe [folder]     open directly in that folder
 
 ```bat
 bash dn.sh build FastDelete.sln    build everything
-bash dn.sh test                    18 xUnit tests (junction, TOCTOU, locked files,
+bash dn.sh test                    42 xUnit tests (junction, TOCTOU, locked files,
                                    long paths, 20k-item channel-backpressure regression, 100k scale)
 bash dn.sh run --project src/FastDelete.Benchmarks -- --profiles tiny10k,tiny100k,deep1k,mixed --workers 1,2,4,8
 ```

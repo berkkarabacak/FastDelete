@@ -19,6 +19,7 @@
         <BooleanToVisibilityConverter x:Key="BoolVis"/>
         <local:BoolToBoldConverter x:Key="BoldConv"/>
         <local:ThemeLabelConverter x:Key="ThemeLabel"/>
+        <local:NotEmptyToVisibilityConverter x:Key="NotEmptyVis"/>
     </Window.Resources>
 
     <Grid>
@@ -68,7 +69,8 @@
                 <Button Content="Select All" Click="SelectAll_Click" Padding="14,8" Margin="0,0,8,0"
                         ToolTip="Select everything in this folder (same as Ctrl+A)"/>
                 <Button Click="DeleteButton_Click" Style="{StaticResource DeletePrimaryButton}"
-                        ToolTip="Delete the highlighted items permanently">
+                        IsEnabled="{Binding HasSelection}"
+                        ToolTip="Delete the highlighted items permanently (or press the Delete key)">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" Margin="0,0,5,0"/>
                         <TextBlock Text="{Binding DeleteLabel}"/>
@@ -150,34 +152,40 @@
 
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
 
-            <DataGrid x:Name="FileGrid" Grid.Column="2" ItemsSource="{Binding ItemsView}"
-                      SelectionChanged="DataGrid_SelectionChanged"
-                      MouseDoubleClick="DataGrid_MouseDoubleClick"
-                      PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown">
-                <DataGrid.ContextMenu>
-                    <ContextMenu FontSize="14">
-                        <MenuItem Header="Select all" Click="SelectAll_Click"/>
-                        <MenuItem Header="Open" Click="OpenItem_Click"/>
-                        <Separator/>
-                        <MenuItem Header="Delete…" Click="DeleteButton_Click"/>
-                    </ContextMenu>
-                </DataGrid.ContextMenu>
-                <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="Name" Width="3*">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,1,5,1"/>
-                                    <TextBlock Text="{Binding Name}" Margin="2,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource SizeConv}}" Width="100"/>
-                    <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="110"/>
-                    <DataGridTextColumn Header="Date changed" Binding="{Binding Modified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="140"/>
-                </DataGrid.Columns>
-            </DataGrid>
+            <Grid Grid.Column="2">
+                <DataGrid x:Name="FileGrid" ItemsSource="{Binding ItemsView}"
+                          SelectionChanged="DataGrid_SelectionChanged"
+                          MouseDoubleClick="DataGrid_MouseDoubleClick"
+                          PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu FontSize="14">
+                            <MenuItem Header="Select all" Click="SelectAll_Click"/>
+                            <MenuItem Header="Open" Click="OpenItem_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Delete…" Click="DeleteButton_Click"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Name" Width="3*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,1,5,1"/>
+                                        <TextBlock Text="{Binding Name}" Margin="2,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource SizeConv}}" Width="100"/>
+                        <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="110"/>
+                        <DataGridTextColumn Header="Date changed" Binding="{Binding Modified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="140"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="{Binding EmptyMessage}"
+                           Visibility="{Binding EmptyMessage, Converter={StaticResource NotEmptyVis}}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="16" Foreground="{DynamicResource Brush.ForegroundDim}"/>
+            </Grid>
         </Grid>
 
         <!-- ===== status bar ===== -->

@@ -47,6 +47,16 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _deleteLabel = "Delete Selected";
 
+    /// <summary>Whether anything is highlighted - the red button greys out otherwise.</summary>
+    [ObservableProperty]
+    private bool _hasSelection;
+
+    /// <summary>Friendly empty-state text: "This folder is empty" / "Nothing matches…" / "".</summary>
+    [ObservableProperty]
+    private string _emptyMessage = string.Empty;
+
+    private readonly AppSettings _settings = SettingsService.Load();
+
     /// <summary>One-line coaching banner, visible until the user selects something.</summary>
     public bool ShowHint => SelectedCount == 0 && !IsDeleting;
 
@@ -110,10 +120,22 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var drive in TreeService.GetDrives())
             TreeRoots.Add(TreeNode.CreateRoot(drive));
-        Navigate(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+        // restore the theme and come back to the last-used folder
+        IsDarkTheme = _settings.DarkTheme;
+        if (IsDarkTheme)
+            Themes.ThemeManager.Apply(dark: true);
+        string start = !string.IsNullOrEmpty(_settings.LastPath) && Directory.Exists(_settings.LastPath)
+            ? _settings.LastPath
+            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Navigate(start);
     }
 
-    partial void OnSearchTextChanged(string value) => ItemsView?.Refresh();
+    partial void OnSearchTextChanged(string value)
+    {
+        ItemsView?.Refresh();
+        UpdateEmptyMessage();
+    }
 
     [RelayCommand]
     private void Navigate(string? path)
@@ -140,7 +162,12 @@ public partial class MainViewModel : ObservableObject
         _forward.Clear();
 
         LoadDirectory(path);
+        SaveLocation(); // remember the folder even if the app crashes later
     }
+
+    /// <summary>Persists folder + theme immediately (geometry is saved on graceful close).</summary>
+    private void SaveLocation()
+        => SettingsService.Save(new AppSettings(LastPath: CurrentPath, DarkTheme: IsDarkTheme));
 
     [RelayCommand]
     private void NavigateBack()
@@ -180,6 +207,7 @@ public partial class MainViewModel : ObservableObject
     {
         IsDarkTheme = !IsDarkTheme;
         Themes.ThemeManager.Apply(IsDarkTheme);
+        SaveLocation();
     }
 
     private async void LoadDirectory(string path)
@@ -213,6 +241,33 @@ public partial class MainViewModel : ObservableObject
             ? $"{what} here — {BrowserService.LastError}"
             : $"{what} here";
         StatusText = bytes > 0 ? $"{what} here ({FormatSize(bytes)})" : friendly;
+        UpdateEmptyMessage();
+    }
+
+    private void UpdateEmptyMessage()
+    {
+        if (Items.Count == 0)
+        {
+            EmptyMessage = "This folder is empty";
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(SearchText) && ItemsView is not null && ItemsView.Cast<object>().FirstOrDefault() is null)
+            EmptyMessage = $"Nothing matches “{SearchText}”";
+        else
+            EmptyMessage = string.Empty;
+    }
+
+    /// <summary>Called by the window on close so the next run restores everything.</summary>
+    public void PersistState(double width, double height, double left, double top, bool maximized)
+    {
+        SettingsService.Save(new AppSettings(
+            LastPath: CurrentPath,
+            DarkTheme: IsDarkTheme,
+            Width: width,
+            Height: height,
+            Left: left,
+            Top: top,
+            Maximized: maximized));
     }
 
     private void RebuildBreadcrumbs(string path)
@@ -257,6 +312,7 @@ public partial class MainViewModel : ObservableObject
         var effective = gridSelection.ToList();
         SelectedCount = effective.Count;
         SelectedBytes = effective.Where(i => i.Size.HasValue).Sum(i => i.Size!.Value);
+        HasSelection = effective.Count > 0;
     }
 
     private void UpdateSelectionStatus()

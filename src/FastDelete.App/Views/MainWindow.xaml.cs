@@ -14,9 +14,53 @@ public partial class MainWindow : Window
 {
     private readonly List<FileSystemItem> _gridSelection = new();
 
-    public MainWindow() => InitializeComponent();
+    public MainWindow()
+    {
+        InitializeComponent();
+
+        // restore window geometry from the last session
+        var s = Services.SettingsService.Load();
+        Width = s.Width;
+        Height = s.Height;
+        if (!double.IsNaN(s.Left) && !double.IsNaN(s.Top))
+        {
+            Left = s.Left;
+            Top = s.Top;
+        }
+        if (s.Maximized)
+            WindowState = WindowState.Maximized;
+
+        Closing += (_, _) =>
+        {
+            var bounds = WindowState == WindowState.Maximized ? RestoreBounds : new System.Windows.Rect(Left, Top, Width, Height);
+            VM.PersistState(bounds.Width, bounds.Height, bounds.Left, bounds.Top, WindowState == WindowState.Maximized);
+        };
+    }
 
     private MainViewModel VM => (MainViewModel)DataContext;
+
+    /// <summary>Explorer-style keys, without stealing keys while typing in a text box.</summary>
+    protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (Keyboard.FocusedElement is System.Windows.Controls.TextBox)
+            return; // let text editing work normally
+        switch (e.Key)
+        {
+            case Key.Delete:
+                StartDelete(DeletionMode.Permanent);
+                e.Handled = true;
+                break;
+            case Key.F5:
+                VM.RefreshCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.Back:
+                VM.NavigateUpCommand.Execute(null);
+                e.Handled = true;
+                break;
+        }
+    }
 
     private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
@@ -134,6 +178,9 @@ public partial class MainWindow : Window
 
         var result = await VM.DeleteAsync(targets, mode);
         VM.RefreshCommand.Execute(null);
+        VM.StatusText = result.Failures.Count == 0
+            ? $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds."
+            : $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds; {result.Failures.Count:N0} could not be deleted.";
 
         if (result.Failures.Count > 0)
         {
