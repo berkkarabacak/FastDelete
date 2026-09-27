@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastDelete — delete huge folders fast, the easy way</title>
+<meta name="description" content="FastDelete is a free Windows app that deletes enormous folders (100,000+ files) in seconds — as easy as Windows Explorer.">
+<style>
+  :root {
+    --red: #c42b1c;
+    --ink: #1b1b1b;
+    --dim: #5c5c66;
+    --bg: #ffffff;
+    --soft: #f4f5f7;
+    --line: #e3e4e8;
+    --accent: #0078d7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--ink); background: var(--bg); line-height: 1.55;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 22px max(24px, calc((100% - 1080px) / 2));
+    border-bottom: 1px solid var(--line);
+  }
+  header img { width: 44px; height: 44px; border-radius: 10px; }
+  header h1 { font-size: 24px; margin: 0; }
+  header .tag { color: var(--dim); font-size: 14px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 24px 64px; }
+  .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; }
+  @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+  .hero h2 { font-size: 34px; line-height: 1.2; margin: 0 0 14px; }
+  .hero p { font-size: 17px; color: var(--dim); margin: 0 0 22px; }
+  .cta {
+    display: inline-block; background: var(--red); color: #fff; text-decoration: none;
+    font-size: 18px; font-weight: 600; padding: 14px 26px; border-radius: 8px;
+  }
+  .cta:hover { filter: brightness(1.08); }
+  .sub { margin-top: 12px; font-size: 13px; color: var(--dim); }
+  .hero img.shot {
+    width: 100%; border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.12);
+  }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 44px 0; }
+  @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
+  .step {
+    background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 20px;
+  }
+  .step .num {
+    display: inline-block; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: #fff; text-align: center; line-height: 28px;
+    font-weight: 700; margin-bottom: 10px;
+  }
+  .step h3 { margin: 0 0 6px; font-size: 17px; }
+  .step p { margin: 0; color: var(--dim); font-size: 14px; }
+  .bench { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 22px 0 8px; }
+  @media (max-width: 720px) { .bench { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 18px; text-align: center; }
+  .card .big { font-size: 30px; font-weight: 700; }
+  .card .lbl { color: var(--dim); font-size: 13px; }
+  .card.hl { border-color: var(--red); }
+  .card.hl .big { color: var(--red); }
+  h2.section { font-size: 24px; margin: 44px 0 8px; }
+  .features { columns: 2; column-gap: 36px; color: var(--dim); }
+  @media (max-width: 720px) { .features { columns: 1; } }
+  .features li { break-inside: avoid; margin-bottom: 8px; }
+  footer {
+    border-top: 1px solid var(--line); color: var(--dim); font-size: 13px;
+    text-align: center; padding: 26px 24px;
+  }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="app-icon.png" alt="FastDelete icon">
+  <div>
+    <h1>FastDelete</h1>
+    <div class="tag">Delete huge folders fast — the easy way. Free, for Windows 10/11.</div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <h2>A folder with 100,000 files?<br>Gone in seconds — not minutes.</h2>
+      <p>
+        FastDelete looks and works like Windows Explorer, but deletes enormous folders
+        about <strong>5× faster</strong> than Explorer and never freezes. Pick a folder,
+        press the big red button, done.
+      </p>
+      <a class="cta" href="https://github.com/berkkarabacak/FastDelete/releases/latest/download/FastDelete-v0.4.0-win-x64.zip">⬇ Download FastDelete (free)</a>
+      <div class="sub">No installation. Unzip, double-click <code>FastDelete.exe</code>. Windows 10/11, 64-bit.</div>
+    </div>
+    <img class="shot" src="screenshot-main.png" alt="FastDelete main window">
+  </section>
+
+  <section class="steps">
+    <div class="step">
+      <span class="num">1</span>
+      <h3>Open the folder</h3>
+      <p>Click “Delete a folder…” and pick any folder — or browse the list like in Explorer.</p>
+    </div>
+    <div class="step">
+      <span class="num">2</span>
+      <h3>Select what goes</h3>
+      <p>Click items, hold <em>Ctrl</em> to add, <em>Shift</em> for a range — or press <em>Select All</em>. The red button always shows how many items are selected.</p>
+    </div>
+    <div class="step">
+      <span class="num">3</span>
+      <h3>Delete</h3>
+      <p>One clear warning (“cannot be undone”), then everything disappears — with a report if anything was locked.</p>
+    </div>
+  </section>
+
+  <h2 class="section">How fast is it?</h2>
+  <p style="color:var(--dim)">Deleting the same folder of 10,100 files on the same PC:</p>
+  <div class="bench">
+    <div class="card hl">
+      <div class="big">2.2 s</div>
+      <div class="lbl">FastDelete</div>
+    </div>
+    <div class="card">
+      <div class="big">5.6 s</div>
+      <div class="lbl">PowerShell Remove-Item</div>
+    </div>
+    <div class="card">
+      <div class="big">10.2 s</div>
+      <div class="lbl">Explorer → Recycle Bin</div>
+    </div>
+  </div>
+
+  <h2 class="section">Why people like it</h2>
+  <ul class="features">
+    <li><strong>Feels like Explorer</strong> — same clicks, same selection, plus a right-click menu.</li>
+    <li><strong>Honest safety</strong> — a clear “cannot be undone” warning; a Recycle Bin option is one click away.</li>
+    <li><strong>Never follows shortcuts</strong> — junctions and links are removed, their targets untouched.</li>
+    <li><strong>Handles locked files</strong> — a file in use never stops the run; you get a retry list afterwards.</li>
+    <li><strong>Pause / resume / cancel</strong> — plain-language progress, always responsive.</li>
+    <li><strong>Big, readable text</strong> — light theme by default, dark mode one click away.</li>
+    <li><strong>Long paths &amp; any language</strong> — deep folders and non-English names just work.</li>
+    <li><strong>Tested</strong> — 18 automated tests, including 100k-file runs and hostile cases.</li>
+  </ul>
+
+  <h2 class="section">Get it</h2>
+  <p>
+    <a href="https://github.com/berkkarabacak/FastDelete/releases/latest/download/FastDelete-v0.4.0-win-x64.zip">Download the latest release</a> —
+    or browse the <a href="https://github.com/berkkarabacak/FastDelete">source code and full README on GitHub</a>.
+  </p>
+</main>
+
+<footer>
+  FastDelete is free and open source · <a href="https://github.com/berkkarabacak/FastDelete">GitHub</a> ·
+  Made with care so anyone can clean up huge folders safely.
+</footer>
+
+</body>
+</html>
