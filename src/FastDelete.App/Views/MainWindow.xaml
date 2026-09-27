@@ -1,0 +1,217 @@
+<Window x:Class="FastDelete.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FastDelete.App.ViewModels"
+        xmlns:local="clr-namespace:FastDelete.App.Views"
+        Title="FastDelete" Width="1280" Height="800"
+        FontSize="14"
+        Icon="/Assets/app.ico"
+        WindowStartupLocation="CenterScreen"
+        AllowDrop="True"
+        Drop="Window_Drop">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    <Window.Resources>
+        <local:SizeConverter x:Key="SizeConv"/>
+        <local:CountConverter x:Key="CountConv"/>
+        <BooleanToVisibilityConverter x:Key="BoolVis"/>
+        <local:BoolToBoldConverter x:Key="BoldConv"/>
+        <local:ThemeLabelConverter x:Key="ThemeLabel"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== top bar: plain-word navigation + the ONE big red button ===== -->
+        <Grid Grid.Row="0" Margin="8,8,8,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <ToolBarTray Grid.Column="0" HorizontalAlignment="Left">
+                <ToolBar>
+                    <Button Content="&#xE72B; Back" FontFamily="Segoe MDL2 Assets" ToolTip="Go back"
+                            Command="{Binding NavigateBackCommand}"/>
+                    <Button Content="&#xE72A; Forward" FontFamily="Segoe MDL2 Assets" ToolTip="Go forward"
+                            Command="{Binding NavigateForwardCommand}"/>
+                    <Button Content="&#xE70E; Up" FontFamily="Segoe MDL2 Assets" ToolTip="Go up one folder"
+                            Command="{Binding NavigateUpCommand}"/>
+                    <Button Content="&#xE72C; Refresh" FontFamily="Segoe MDL2 Assets" ToolTip="Reload this folder"
+                            Command="{Binding RefreshCommand}"/>
+                    <Separator/>
+                    <Button FontWeight="SemiBold" Click="BrowseFolder_Click"
+                            ToolTip="Pick any folder on this PC — you can then choose what to delete inside it">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Margin="0,0,4,0"/>
+                            <TextBlock Text="Delete a folder…"/>
+                        </StackPanel>
+                    </Button>
+                    <Separator/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Find:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox Width="200" ToolTip="Type part of a name to filter the list"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </ToolBar>
+            </ToolBarTray>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Select All" Click="SelectAll_Click" Padding="14,8" Margin="0,0,8,0"
+                        ToolTip="Select everything in this folder (same as Ctrl+A)"/>
+                <Button Click="DeleteButton_Click" Style="{StaticResource DeletePrimaryButton}"
+                        ToolTip="Delete the highlighted items permanently">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding DeleteLabel}"/>
+                    </StackPanel>
+                </Button>
+                <Button Content="▾" Style="{StaticResource DeleteArrowButton}" ToolTip="More delete options">
+                    <Button.ContextMenu>
+                        <ContextMenu FontSize="14">
+                            <MenuItem Header="Move to Recycle Bin instead (slower, can be undone)" Click="DeleteRecycle_Click"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== breadcrumb: where am I, in plain clickable pieces ===== -->
+        <Border Grid.Row="1" Background="{DynamicResource Brush.Toolbar.Background}"
+                BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="0,1"
+                Padding="8,3">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Breadcrumbs}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="{Binding Name}" Tag="{Binding Path}" Click="Breadcrumb_Click"
+                                        FontWeight="{Binding IsLast, Converter={StaticResource BoldConv}}"
+                                        Style="{StaticResource BreadcrumbButton}"/>
+                                <TextBlock Text="›" Margin="2,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ===== coaching hint, disappears once something is selected ===== -->
+        <Border Grid.Row="2" Style="{StaticResource HintBanner}" Visibility="{Binding ShowHint, Converter={StaticResource BoolVis}}">
+            <StackPanel Orientation="Horizontal" Margin="10,6">
+                <TextBlock Text="Tip:" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                <TextBlock TextWrapping="Wrap">
+                    <Run FontWeight="SemiBold">How to delete (same as in Windows):</Run>
+                    <Run>  1. Open the folder above  •  2. Click items to highlight them — hold </Run>
+                    <Run FontWeight="SemiBold">Ctrl</Run>
+                    <Run> to add one, </Run>
+                    <Run FontWeight="SemiBold">Shift</Run>
+                    <Run> for a range — or press </Run>
+                    <Run FontWeight="SemiBold">Select All</Run>
+                    <Run>  •  3. Press the red button</Run>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== main content ===== -->
+        <Grid Grid.Row="3" Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280" MinWidth="140"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TreeView Grid.Column="0" ItemsSource="{Binding TreeRoots}"
+                      SelectedItemChanged="TreeView_SelectedItemChanged"
+                      FontSize="14">
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="{Binding Icon}" Width="18" Height="18" Margin="0,1,4,1"/>
+                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+
+            <DataGrid x:Name="FileGrid" Grid.Column="2" ItemsSource="{Binding ItemsView}"
+                      SelectionChanged="DataGrid_SelectionChanged"
+                      MouseDoubleClick="DataGrid_MouseDoubleClick"
+                      PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown">
+                <DataGrid.ContextMenu>
+                    <ContextMenu FontSize="14">
+                        <MenuItem Header="Select all" Click="SelectAll_Click"/>
+                        <MenuItem Header="Open" Click="OpenItem_Click"/>
+                        <Separator/>
+                        <MenuItem Header="Delete…" Click="DeleteButton_Click"/>
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="Name" Width="3*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,1,5,1"/>
+                                    <TextBlock Text="{Binding Name}" Margin="2,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource SizeConv}}" Width="100"/>
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="110"/>
+                    <DataGridTextColumn Header="Date changed" Binding="{Binding Modified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="140"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+
+        <!-- ===== status bar ===== -->
+        <StatusBar Grid.Row="4" FontSize="13">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusText}"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <Button Content="{Binding IsDarkTheme, Converter={StaticResource ThemeLabel}}"
+                        Command="{Binding ToggleThemeCommand}" Style="{StaticResource BreadcrumbButton}"/>
+            </StatusBarItem>
+        </StatusBar>
+
+        <!-- ===== progress overlay ===== -->
+        <Border Grid.RowSpan="5" Style="{StaticResource ProgressOverlayBackground}"
+                Visibility="{Binding IsDeleting, Converter={StaticResource BoolVis}}">
+            <Border Width="560" Padding="24" CornerRadius="8"
+                    Background="{DynamicResource Brush.Panel.Background}"
+                    BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="{Binding DeleteModeLabel}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                    <ProgressBar IsIndeterminate="True" Height="10" Margin="0,0,0,14"/>
+                    <TextBlock Text="{Binding ProgressCounters}" FontSize="14"/>
+                    <TextBlock Text="{Binding ProgressRate}" FontSize="12" Margin="0,4,0,0"
+                               Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                    <TextBlock Text="{Binding ProgressCurrentItem}" FontSize="12" Margin="0,4,0,16"
+                               Foreground="{DynamicResource Brush.ForegroundDim}" TextTrimming="CharacterEllipsis"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="{Binding IsPaused, Converter={x:Static local:PauseLabelConverter.Instance}}" Command="{Binding TogglePauseCommand}" Margin="0,0,8,0"/>
+                        <Button Content="Cancel" Command="{Binding CancelDeleteCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Grid>
+</Window>
