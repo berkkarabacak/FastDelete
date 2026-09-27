@@ -76,9 +76,14 @@
                         <TextBlock Text="{Binding DeleteLabel}"/>
                     </StackPanel>
                 </Button>
-                <Button Content="▾" Style="{StaticResource DeleteArrowButton}" ToolTip="More delete options">
+                <Button Content="▾" Style="{StaticResource DeleteArrowButton}" ToolTip="More options">
                     <Button.ContextMenu>
-                        <ContextMenu FontSize="14">
+                        <ContextMenu FontSize="14" Opened="OptionsMenu_Opened">
+                            <MenuItem x:Name="ExplorerMenuItem" Header="Add “Delete with FastDelete” to the right-click menu in Windows"
+                                      IsCheckable="True" Click="ToggleExplorerMenu_Click"/>
+                            <MenuItem Header="Open this folder in Windows Explorer"
+                                      Command="{Binding OpenInExplorerCommand}"/>
+                            <Separator/>
                             <MenuItem Header="Move to Recycle Bin instead (slower, can be undone)" Click="DeleteRecycle_Click"/>
                         </ContextMenu>
                     </Button.ContextMenu>

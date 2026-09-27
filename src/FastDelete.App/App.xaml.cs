@@ -9,10 +9,38 @@ public partial class App : System.Windows.Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Software rendering: WPF defaults to hardware (WARP) tier 1/2 even on GPU-less
+        // Software-rendering: WPF defaults to hardware (WARP) tier 1/2 even on GPU-less
         // VMs, which produced blank-window artifacts there; software is plenty for a
         // file-manager UI and keeps rendering identical across machines.
         RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+
+        // Scriptable Explorer-menu management (no window):
+        //   FastDelete.exe --install-explorer-menu
+        //   FastDelete.exe --uninstall-explorer-menu
+        if (e.Args.Length > 0)
+        {
+            try
+            {
+                if (e.Args[0] == "--install-explorer-menu")
+                {
+                    Services.ExplorerIntegration.Enable();
+                    Environment.Exit(0);
+                    return;
+                }
+                if (e.Args[0] == "--uninstall-explorer-menu")
+                {
+                    Services.ExplorerIntegration.Disable();
+                    Environment.Exit(0);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex);
+                Environment.Exit(1);
+                return;
+            }
+        }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>

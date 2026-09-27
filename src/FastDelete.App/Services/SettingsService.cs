@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace FastDelete.App.Services;
 
-/// <summary>User preferences: last folder, theme, window geometry. Survives restarts.</summary>
+/// <summary>User preferences: last folder, recent folders, theme, window geometry. Survives restarts.</summary>
 public sealed record AppSettings(
     string? LastPath = null,
     bool DarkTheme = false,
@@ -11,7 +11,8 @@ public sealed record AppSettings(
     double Height = 800,
     double Left = double.NaN,
     double Top = double.NaN,
-    bool Maximized = false);
+    bool Maximized = false,
+    List<string>? RecentPaths = null);
 
 public static class SettingsService
 {

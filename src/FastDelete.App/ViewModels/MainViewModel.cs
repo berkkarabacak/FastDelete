@@ -55,7 +55,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _emptyMessage = string.Empty;
 
-    private readonly AppSettings _settings = SettingsService.Load();
+    private AppSettings _settings = SettingsService.Load();
 
     /// <summary>One-line coaching banner, visible until the user selects something.</summary>
     public bool ShowHint => SelectedCount == 0 && !IsDeleting;
@@ -118,6 +118,18 @@ public partial class MainViewModel : ObservableObject
         quick.IsExpanded = true;
         TreeRoots.Add(quick);
 
+        // recent folders - where she actually cleaned up last
+        var recentPaths = (_settings.RecentPaths ?? new List<string>()).Where(Directory.Exists).Take(5).ToList();
+        if (recentPaths.Count > 0)
+        {
+            var recent = new TreeNode { Name = "Recent", FullPath = string.Empty };
+            foreach (var path in recentPaths)
+                recent.Children.Add(TreeNode.Create(Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } n ? n : path,
+                    path, IconService.GetIcon(path, isDirectory: true)));
+            recent.IsExpanded = true;
+            TreeRoots.Add(recent);
+        }
+
         foreach (var drive in TreeService.GetDrives())
             TreeRoots.Add(TreeNode.CreateRoot(drive));
 
@@ -167,7 +179,26 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Persists folder + theme immediately (geometry is saved on graceful close).</summary>
     private void SaveLocation()
-        => SettingsService.Save(new AppSettings(LastPath: CurrentPath, DarkTheme: IsDarkTheme));
+    {
+        var recent = new List<string>();
+        if (!string.IsNullOrEmpty(CurrentPath))
+            recent.Add(CurrentPath);
+        foreach (var old in _settings.RecentPaths ?? new List<string>())
+        {
+            if (recent.Count >= 5) break;
+            if (!recent.Contains(old, StringComparer.OrdinalIgnoreCase))
+                recent.Add(old);
+        }
+        _settings = _settings with { LastPath = CurrentPath, DarkTheme = IsDarkTheme, RecentPaths = recent };
+        SettingsService.Save(_settings);
+    }
+
+    [RelayCommand]
+    private void OpenInExplorer()
+    {
+        if (!string.IsNullOrEmpty(CurrentPath))
+            ExplorerIntegration.OpenInExplorer(CurrentPath);
+    }
 
     [RelayCommand]
     private void NavigateBack()
@@ -260,14 +291,14 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Called by the window on close so the next run restores everything.</summary>
     public void PersistState(double width, double height, double left, double top, bool maximized)
     {
-        SettingsService.Save(new AppSettings(
-            LastPath: CurrentPath,
-            DarkTheme: IsDarkTheme,
-            Width: width,
-            Height: height,
-            Left: left,
-            Top: top,
-            Maximized: maximized));
+        SettingsService.Save(_settings with
+        {
+            Width = width,
+            Height = height,
+            Left = left,
+            Top = top,
+            Maximized = maximized,
+        });
     }
 
     private void RebuildBreadcrumbs(string path)

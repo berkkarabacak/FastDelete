@@ -13,11 +13,13 @@ public readonly struct DeleteWorkItem
     public string Path { get; }        // \\?\ -prefixed
     public WorkItemKind Kind { get; }
     public uint Attributes { get; }
+    public long Size { get; }          // file bytes (0 for directories/links)
 
-    public DeleteWorkItem(string path, WorkItemKind kind, uint attributes)
+    public DeleteWorkItem(string path, WorkItemKind kind, uint attributes, long size = 0)
     {
         Path = path;
         Kind = kind;
         Attributes = attributes;
+        Size = size;
     }
 }

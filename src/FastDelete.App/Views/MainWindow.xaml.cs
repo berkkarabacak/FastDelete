@@ -140,14 +140,43 @@ public partial class MainWindow : Window
 
     private void DataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (((FrameworkElement)e.OriginalSource).DataContext is FileSystemItem { IsDirectory: true } item)
+        if (((FrameworkElement)e.OriginalSource).DataContext is not FileSystemItem item)
+            return;
+        if (item.IsDirectory)
             VM.NavigateCommand.Execute(item.FullPath);
+        else
+            Services.ExplorerIntegration.OpenFileWithDefaultApp(item.FullPath);
     }
 
     private void OpenItem_Click(object sender, RoutedEventArgs e)
     {
-        if (FileGrid.SelectedItem is FileSystemItem { IsDirectory: true } item)
+        if (FileGrid.SelectedItem is not FileSystemItem item)
+            return;
+        if (item.IsDirectory)
             VM.NavigateCommand.Execute(item.FullPath);
+        else
+            Services.ExplorerIntegration.OpenFileWithDefaultApp(item.FullPath);
+    }
+
+    private void ToggleExplorerMenu_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (Services.ExplorerIntegration.IsEnabled)
+                Services.ExplorerIntegration.Disable();
+            else
+                Services.ExplorerIntegration.Enable();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Could not change the Explorer menu:\n{ex.Message}",
+                "FastDelete", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void OptionsMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        ExplorerMenuItem.IsChecked = Services.ExplorerIntegration.IsEnabled;
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
@@ -173,7 +202,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var confirm = new ConfirmDeleteDialog(VM.SelectedCount, VM.SelectedBytes, mode) { Owner = this };
+        var confirm = new ConfirmDeleteDialog(targets, VM.SelectedCount, VM.SelectedBytes, mode) { Owner = this };
         if (confirm.ShowDialog() != true) return;
 
         var result = await VM.DeleteAsync(targets, mode);

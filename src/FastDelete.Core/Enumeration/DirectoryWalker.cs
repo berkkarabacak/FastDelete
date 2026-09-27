@@ -47,7 +47,7 @@ public static class DirectoryWalker
 
         if (!Win32.IsDirectory(rootAttributes))
         {
-            await output.WriteAsync(new DeleteWorkItem(rootPath, WorkItemKind.File, rootAttributes), cancellationToken).ConfigureAwait(false);
+            await output.WriteAsync(new DeleteWorkItem(rootPath, WorkItemKind.File, rootAttributes, QueryFileSize(rootPath)), cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -142,7 +142,24 @@ public static class DirectoryWalker
         }
         else
         {
-            await output.WriteAsync(new DeleteWorkItem(childPath, WorkItemKind.File, attrs), cancellationToken).ConfigureAwait(false);
+            long size = ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;
+            await output.WriteAsync(new DeleteWorkItem(childPath, WorkItemKind.File, attrs, size), cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Size of a single file via a one-shot FindFirstFile (root file case).</summary>
+    private static long QueryFileSize(string prefixedPath)
+    {
+        IntPtr h = Win32.FindFirstFileExW(
+            prefixedPath,
+            Win32.FINDEX_INFO_LEVELS.FindExInfoBasic,
+            out var data,
+            Win32.FINDEX_SEARCH_OPS.FindExSearchNameMatch,
+            IntPtr.Zero,
+            0);
+        if (h == IntPtr.Zero || h == InvalidHandle)
+            return 0;
+        Win32.FindClose(h);
+        return ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
     }
 }
