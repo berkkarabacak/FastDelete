@@ -66,6 +66,26 @@
   .features { columns: 2; column-gap: 36px; color: var(--dim); }
   @media (max-width: 720px) { .features { columns: 1; } }
   .features li { break-inside: avoid; margin-bottom: 8px; }
+  /* ===== quick-start card: first thing on the page ===== */
+  .quickstart {
+    background: var(--soft); border: 1px solid var(--line); border-radius: 16px;
+    padding: 28px; text-align: center; margin-bottom: 40px;
+  }
+  .quickstart h2 { font-size: 26px; margin: 0 0 6px; }
+  .quickstart .qs-sub { color: var(--dim); margin: 0 0 20px; font-size: 15px; }
+  .qs-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 22px;
+  }
+  @media (max-width: 860px) { .qs-grid { grid-template-columns: 1fr; } }
+  .qs-grid figure {
+    margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px;
+  }
+  .qs-grid img {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block;
+  }
+  .qs-grid figcaption { font-size: 14px; color: var(--ink); margin-top: 10px; text-align: left; }
+  .qs-grid figcaption strong { color: var(--red); }
   footer {
     border-top: 1px solid var(--line); color: var(--dim); font-size: 13px;
     text-align: center; padding: 26px 24px;
@@ -84,6 +104,28 @@
 </header>
 
 <main>
+  <!-- ===== quick start: the 3 pictures first, above the fold ===== -->
+  <section class="quickstart">
+    <h2>Made for everyone — 3 steps and done</h2>
+    <p class="qs-sub">No computer skills needed. If you can click a mouse, you can use FastDelete.</p>
+    <div class="qs-grid">
+      <figure>
+        <img src="step-1.png" alt="Step 1: click Delete a folder">
+        <figcaption><strong>1.</strong> Click <b>“Delete a folder…”</b> and pick the folder</figcaption>
+      </figure>
+      <figure>
+        <img src="step-2.png" alt="Step 2: press Select All">
+        <figcaption><strong>2.</strong> Press <b>Select All</b> — the red button shows the count</figcaption>
+      </figure>
+      <figure>
+        <img src="step-3.png" alt="Step 3: confirm">
+        <figcaption><strong>3.</strong> Read the warning, press <b>Yes, delete forever</b></figcaption>
+      </figure>
+    </div>
+    <a class="cta" href="https://github.com/berkkarabacak/FastDelete/releases/latest/download/FastDelete-v0.4.0-win-x64.zip">⬇ Download FastDelete (free)</a>
+    <div class="sub">Windows 10/11 · no installation · unzip and double-click</div>
+  </section>
+
   <section class="hero">
     <div>
       <h2>A folder with 100,000 files?<br>Gone in seconds — not minutes.</h2>
@@ -115,28 +157,6 @@
       <p>One clear warning (“cannot be undone”), then everything disappears — with a report if anything was locked.</p>
     </div>
   </section>
-
-  <h2 class="section">See how easy it is — 3 steps, with pictures</h2>
-  <div class="steps" style="margin-top:14px">
-    <div class="step">
-      <span class="num">1</span>
-      <img src="step-1.png" alt="Step 1: click Delete a folder" style="width:100%;border:1px solid var(--line);border-radius:8px;margin-bottom:10px">
-      <h3>Open the folder</h3>
-      <p>Click <strong>“Delete a folder…”</strong> and pick any folder — or click folders in the list, just like Explorer.</p>
-    </div>
-    <div class="step">
-      <span class="num">2</span>
-      <img src="step-2.png" alt="Step 2: press Select All" style="width:100%;border:1px solid var(--line);border-radius:8px;margin-bottom:10px">
-      <h3>Select what goes</h3>
-      <p>Click items, hold <em>Ctrl</em>/<em>Shift</em> for more — or press <strong>Select All</strong>. The red button shows the count.</p>
-    </div>
-    <div class="step">
-      <span class="num">3</span>
-      <img src="step-3.png" alt="Step 3: confirm" style="width:100%;border:1px solid var(--line);border-radius:8px;margin-bottom:10px">
-      <h3>Delete</h3>
-      <p>One clear warning, then <strong>Yes, delete forever</strong> — done. Locked files get a retry list, never a crash.</p>
-    </div>
-  </div>
 
   <h2 class="section">How fast is it?</h2>
   <p style="color:var(--dim)">Deleting the same folder of 10,100 files on the same PC:</p>
