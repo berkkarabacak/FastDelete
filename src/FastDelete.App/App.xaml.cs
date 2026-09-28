@@ -17,10 +17,24 @@ public partial class App : System.Windows.Application
         // Scriptable Explorer-menu management (no window):
         //   FastDelete.exe --install-explorer-menu
         //   FastDelete.exe --uninstall-explorer-menu
+        // Engine benchmark on an existing folder (no window):
+        //   FastDelete.exe --bench "C:\path\to\folder"
         if (e.Args.Length > 0)
         {
             try
             {
+                if (e.Args[0] == "--bench" && e.Args.Length > 1 && System.IO.Directory.Exists(e.Args[1]))
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    // Task.Run: without it the engine's awaits capture the WPF sync
+                    // context and block on this very thread - a classic deadlock.
+                    var result = Task.Run(() =>
+                        new FastDelete.Core.Deletion.DeletionEngine().DeleteAsync(new[] { e.Args[1] }))
+                        .GetAwaiter().GetResult();
+                    sw.Stop();
+                    Console.WriteLine($"RESULT seconds={sw.Elapsed.TotalSeconds:F2} items={result.TotalItems} failures={result.Failures.Count} rate={(long)(result.TotalItems / sw.Elapsed.TotalSeconds)}");
+                    Environment.Exit(result.Failures.Count > 0 ? 2 : 0);
+                }
                 if (e.Args[0] == "--install-explorer-menu")
                 {
                     Services.ExplorerIntegration.Enable();
