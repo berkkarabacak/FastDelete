@@ -207,9 +207,9 @@ public partial class MainWindow : Window
 
         var result = await VM.DeleteAsync(targets, mode);
         VM.RefreshCommand.Execute(null);
-        VM.StatusText = result.Failures.Count == 0
+        VM.SetStatusAfterLoad(result.Failures.Count == 0
             ? $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds."
-            : $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds; {result.Failures.Count:N0} could not be deleted.";
+            : $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds; {result.Failures.Count:N0} could not be deleted.");
 
         if (result.Failures.Count > 0)
         {

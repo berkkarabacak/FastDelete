@@ -273,7 +273,18 @@ public partial class MainViewModel : ObservableObject
             : $"{what} here";
         StatusText = bytes > 0 ? $"{what} here ({FormatSize(bytes)})" : friendly;
         UpdateEmptyMessage();
+        // a post-delete summary must survive the async refresh that follows it
+        if (_statusAfterLoad is not null)
+        {
+            StatusText = _statusAfterLoad;
+            _statusAfterLoad = null;
+        }
     }
+
+    private string? _statusAfterLoad;
+
+    /// <summary>Shows this message once the current folder finishes reloading.</summary>
+    public void SetStatusAfterLoad(string message) => _statusAfterLoad = message;
 
     private void UpdateEmptyMessage()
     {
