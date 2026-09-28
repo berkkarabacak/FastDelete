@@ -27,6 +27,7 @@ public static class Win32
     public const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
     public const uint FILE_FLAG_POSIX_SEMANTICS = 0x01000000;
     public const uint FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000;
+    public const uint FILE_FLAG_DELETE_ON_CLOSE = 0x00001000;
 
     public const int ERROR_INVALID_FUNCTION = 1;
     public const int ERROR_FILE_NOT_FOUND = 2;

@@ -33,7 +33,7 @@ as Windows Explorer.
 
 ## Download
 
-Grab `FastDelete-v0.5.0-win-x64.zip` from the
+Grab `FastDelete-v0.5.1-win-x64.zip` from the
 [Releases page](https://github.com/berkkarabacak/FastDelete/releases) — no installation
 needed, works on Windows 10/11 x64. Start `FastDelete.exe` (or drag a folder onto
 `FastDelete.cmd`).
