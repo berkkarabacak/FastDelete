@@ -9,9 +9,8 @@ FastDelete: a free, open-source Windows app for deleting enormous folders (teste
 ("mom-friendly"). Public repo: https://github.com/berkkarabacak/FastDelete
 Live site (GitHub Pages): https://berkkarabacak.github.io/FastDelete/
 
-Latest released version: **v0.5.2** (v0.5.3 code fix pushed: Done-summary race).
-Latest published release on GitHub: v0.5.2. Consider tagging v0.5.3 next time you
-publish.
+Latest released version: **v0.5.4** (one-click install.cmd/uninstall.cmd in the zip,
+plus a fix for swallowed count-cancellation). Latest published release on GitHub: v0.5.4.
 
 The app is also INSTALLED on the dev machine (see "Installed on this machine" below).
 
@@ -27,6 +26,9 @@ tests/FastDelete.TestData     deterministic tree generator (console)
 docs/index.html            GitHub Pages landing site (source = main branch /docs)
 docs/benchmarks.md         measurement history + strategy shootout
 docs/step-1..3.png         annotated walkthrough screenshots
+release/                   files that ship inside the release zip (install.cmd,
+                           uninstall.cmd, README.txt, make-practice-files.cmd,
+                           Benchmark-on-this-PC.bat/.ps1) - edit versions here
 tools/make_icon.py         regenerates Assets/app.ico
 artifacts/                 release zips (gitignored; rebuild via publish)
 scripts/                   UI-automation test scripts (see below)
@@ -38,7 +40,12 @@ scripts/                   UI-automation test scripts (see below)
    environment is missing standard Windows env vars (ProgramFiles(x86), USERPROFILE,
    etc.); bare `dotnet` crashes with "Value cannot be null (Parameter 'path1')".
    dn.sh injects everything via `env`. If restore misbehaves:
-   `bash dn.sh build-server shutdown` (stale MSBuild node reuse is a trap).
+   `bash dn.sh build-server shutdown` (stale MSBuild node reuse is a trap - it once
+   kept running pre-fix binaries after an edit; clean obj/bin if in doubt).
+   NOTE: dn.sh hardcodes OdinLocal paths and `/c/Program Files/dotnet`. On any other
+   machine, copy it to an untracked `dn-local.sh`, fix USERPROFILE/APPDATA/TEMP and
+   the SDK PATH (the dotnet-install script needs `-Architecture x64` explicitly -
+   same missing-env-var trap).
 2. **Never declare a `GetLastError` P/Invoke stub** — a stub clobbers last error.
    Always `Marshal.GetLastWin32Error()` (this bug cost a day).
 3. **The Win32 `SetFileInformationByHandle(FileDispositionInfoEx)` wrapper rejects
@@ -83,14 +90,18 @@ FastDelete.exe --install-explorer-menu / --uninstall-explorer-menu    # Explorer
 3. `bash dn.sh publish src/FastDelete.App/FastDelete.App.csproj -c Release -r win-x64
    --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o artifacts/publish`
 4. Zip (PowerShell Compress-Archive): publish\FastDelete.exe + the 5 *_cor3.dll +
-   README.txt + make-practice-files.cmd + Benchmark-on-this-PC.bat/.ps1 →
-   artifacts/FastDelete-vX.Y.Z-win-x64.zip.
+   everything from release\ (README.txt + make-practice-files.cmd +
+   Benchmark-on-this-PC.bat/.ps1 + install.cmd + uninstall.cmd) →
+   artifacts/FastDelete-vX.Y.Z-win-x64.zip. Bump the version line in
+   release/README.txt first.
 5. `sed -i 's/vX.Y.Z-win-x64.zip/vNEW-win-x64.zip/g' docs/index.html README.md`.
 6. Commit, push (see env fact 7).
 7. Create release via GitHub API (POST /repos/berkkarabacak/FastDelete/releases),
    then upload the zip to its upload_url with Content-Type: application/zip.
 8. Wait ~60s, verify https://berkkarabacak.github.io/FastDelete/ serves the new
    version string and the download URL returns 206/200 with --range 0-1000.
+   If Pages doesn't rebuild within ~5 min of the push (happened for v0.5.4),
+   trigger it: POST /repos/berkkarabacak/FastDelete/pages/builds, then re-check.
 9. GUI smoke test: launch the published exe with a folder arg; check via UIA.
 
 ## Architecture notes (don't reopen these decisions)
@@ -123,21 +134,27 @@ FastDelete.exe --install-explorer-menu / --uninstall-explorer-menu    # Explorer
 
 ## Installed on this machine (dev box)
 
-- `C:\Users\OdinLocal\AppData\Local\Programs\FastDelete\` (v0.5.3 build, manually
-  copied — a proper installer is a TODO).
-- Start Menu shortcut "FastDelete".
+NOTE: the box is now the `berk` machine (the OdinLocal paths below are history).
+- `C:\Users\berk\AppData\Local\Programs\FastDelete\` (v0.5.4, installed via
+  release\install.cmd - the zip's installer does exactly this).
+- Start Menu shortcut "FastDelete" (under %APPDATA%\Microsoft\Windows\Start Menu\Programs).
 - Explorer right-click "Delete with FastDelete" enabled (HKCU).
-- To uninstall manually: delete the folder, the .lnk, and run
-  `FastDelete.exe --uninstall-explorer-menu`.
+- To uninstall: run uninstall.cmd in the install folder (removes all three).
+- .NET SDK 8.0.425 lives at C:\Users\berk\.dotnet (user-local, not on PATH;
+  dn-local.sh points at it).
 
 ## Known rough edges / TODO ideas
 
-- No real installer/uninstaller (Inno Setup absent on the box; zip + cmd fallback).
-- GUI untested by unit tests (all GUI verification is UIA scripting).
+- No Inno Setup/MSI installer (Inno absent on the box); install.cmd/uninstall.cmd
+  from release/ cover install, Start Menu, Explorer entry, and clean removal.
+- GUI untested by unit tests (all GUI verification is UIA scripting). UIA notes:
+  the big buttons have empty Name (label is a child Text, often behind an icon
+  glyph - match with *substring*), and the confirm dialog is a Window INSIDE the
+  main window's subtree, not a top-level window.
 - Recycle-bin path has no per-file progress granularity.
 - The race script's Explorer leg can hit the "Delete Multiple Items" confirmation;
   it auto-presses Enter, but the dialog title may vary by Windows build.
-- Token hygiene: owner was asked (3x) to revoke the PAT used during setup.
+- Token hygiene: owner was asked (4x now) to revoke the PAT used during setup.
 
 ## Owner's context
 
