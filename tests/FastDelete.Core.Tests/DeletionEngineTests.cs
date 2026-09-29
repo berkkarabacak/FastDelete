@@ -1,4 +1,6 @@
 using FastDelete.Core.Deletion;
+using FastDelete.Core.Enumeration;
+using FastDelete.Core.Interop;
 using Xunit;
 
 namespace FastDelete.Core.Tests;
@@ -278,6 +280,48 @@ public class DeletionEngineTests : IDisposable
 
         Assert.True(result.WasCancelled);
         Assert.True(result.ItemsProcessed < 40_000);
+        // Stopping must not turn unfinished folders into "folder not empty" retries.
+        Assert.DoesNotContain(result.Failures, f => f.ErrorCode == Win32.ERROR_DIR_NOT_EMPTY);
+    }
+
+    [Fact]
+    public async Task Cancelled_run_leaves_queued_directories_in_place_and_keeps_deleted_files_gone()
+    {
+        string root = NewRoot();
+        string first = Path.Combine(root, "first");
+        string second = Path.Combine(root, "second");
+        Directory.CreateDirectory(first);
+        Directory.CreateDirectory(second);
+        File.WriteAllText(Path.Combine(first, "a.txt"), "x");
+        File.WriteAllText(Path.Combine(second, "b.txt"), "x");
+
+        using var cts = new CancellationTokenSource();
+        string? queued = null;
+        var engine = new DeletionEngine(new DeletionOptions
+        {
+            MaxDegreeOfParallelism = 1,
+            TestOnlyAfterDirectoryQueued = (kind, path) =>
+            {
+                if (kind == WorkItemKind.Directory && queued == null)
+                {
+                    queued = path;
+                    cts.Cancel();
+                }
+            },
+        });
+
+        var result = await engine.DeleteAsync(new[] { root }, cancellationToken: cts.Token);
+
+        Assert.True(result.WasCancelled);
+        Assert.False(string.IsNullOrEmpty(queued));
+        Assert.True(Directory.Exists(queued), "the folder the user stopped on must still be there");
+        Assert.Empty(Directory.EnumerateFiles(queued!));
+        Assert.True(Directory.Exists(root));
+        Assert.True(result.FilesDeleted >= 1);
+        Assert.DoesNotContain(result.Failures, f => f.ErrorCode == Win32.ERROR_DIR_NOT_EMPTY);
+        Assert.DoesNotContain(result.Failures, f => string.Equals(f.Path, queued, StringComparison.OrdinalIgnoreCase));
+        var plan = DeleteSafety.PlanRetry(DeletionMode.Permanent, result.Failures, result.WasCancelled);
+        Assert.DoesNotContain(plan.Paths, p => string.Equals(p, queued, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

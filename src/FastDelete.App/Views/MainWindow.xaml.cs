@@ -202,26 +202,42 @@ public partial class MainWindow : Window
             return;
         }
 
-        var confirm = new ConfirmDeleteDialog(targets, VM.SelectedCount, VM.SelectedBytes, mode) { Owner = this };
-        if (confirm.ShowDialog() != true) return;
+        if (!ConfirmDelete(targets, VM.SelectedBytes, mode))
+            return;
 
         var result = await VM.DeleteAsync(targets, mode);
-        VM.RefreshCommand.Execute(null);
-        VM.SetStatusAfterLoad(result.Failures.Count == 0
-            ? $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds."
-            : $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds; {result.Failures.Count:N0} could not be deleted.");
+        ShowOutcome(result);
 
-        if (result.Failures.Count > 0)
-        {
-            var report = new FailureReportDialog(result.Failures, mode) { Owner = this };
-            if (report.ShowDialog() == true && report.RetryPaths.Count > 0)
-            {
-                var retryResult = await VM.DeleteAsync(report.RetryPaths, DeletionMode.Permanent);
-                VM.RefreshCommand.Execute(null);
-                if (retryResult.Failures.Count > 0)
-                    _ = new FailureReportDialog(retryResult.Failures, DeletionMode.Permanent) { Owner = this }.ShowDialog();
-            }
-        }
+        if (result.Failures.Count == 0)
+            return;
+
+        // Retry keeps the mode the user already chose. A cancelled run does not
+        // offer leftover folders (those are not retryable). A destructive retry
+        // goes through the same confirm dialog, which names the paths and the mode.
+        var plan = DeleteSafety.PlanRetry(mode, result.Failures, result.WasCancelled);
+        var report = new FailureReportDialog(result.Failures, mode, result.WasCancelled) { Owner = this };
+        if (report.ShowDialog() != true || !plan.NeedsConfirmation || plan.Paths.Count == 0)
+            return;
+
+        if (!ConfirmDelete(plan.Paths, selectedBytes: 0, plan.Mode))
+            return;
+
+        var retryResult = await VM.DeleteAsync(plan.Paths, plan.Mode);
+        ShowOutcome(retryResult);
+        if (retryResult.Failures.Count > 0)
+            _ = new FailureReportDialog(retryResult.Failures, plan.Mode, retryResult.WasCancelled, offerRetry: false) { Owner = this }.ShowDialog();
+    }
+
+    private bool ConfirmDelete(IReadOnlyList<string> targets, long selectedBytes, DeletionMode mode)
+    {
+        var confirm = new ConfirmDeleteDialog(targets, targets.Count, selectedBytes, mode) { Owner = this };
+        return confirm.ShowDialog() == true;
+    }
+
+    private void ShowOutcome(DeletionResult result)
+    {
+        VM.RefreshCommand.Execute(null);
+        VM.SetStatusAfterLoad(DeleteSafety.Summarize(result));
     }
 }
 
