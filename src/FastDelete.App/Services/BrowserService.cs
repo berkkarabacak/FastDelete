@@ -1,5 +1,7 @@
 using System.IO;
 using FastDelete.App.Models;
+using FastDelete.Core.Deletion;
+using FastDelete.Core.Enumeration;
 
 namespace FastDelete.App.Services;
 
@@ -9,8 +11,10 @@ public static class BrowserService
 {
     public static string LastError { get; private set; } = string.Empty;
 
-    /// <summary>Children of a directory, one level, dirs-first then files, both name-sorted.</summary>
-    public static List<FileSystemItem> LoadItems(string path)
+    /// <summary>Children of a directory, one level, dirs-first then files, both name-sorted.
+    /// Hidden and dot names stay out unless <paramref name="includeHidden"/> is set.
+    /// Folder sizes are filled in later so opening a folder does not walk every subtree.</summary>
+    public static List<FileSystemItem> LoadItems(string path, bool includeHidden = false)
     {
         LastError = string.Empty;
         var items = new List<FileSystemItem>(1024);
@@ -18,27 +22,33 @@ public static class BrowserService
         {
             foreach (var dir in EnumerateSafe(path, directories: true))
             {
-                // NOTE: child counts are intentionally not computed here - enumerating
-                // every subtree on each folder open is O(tree) and stalls the UI.
+                if (!ListingRules.ShouldShow(dir.Name, IsHidden(dir), IsSystem(dir), includeHidden))
+                    continue;
+                bool link = (dir.Attributes & FileAttributes.ReparsePoint) != 0;
                 items.Add(new FileSystemItem
                 {
                     Name = dir.Name,
                     FullPath = dir.FullName,
                     IsDirectory = true,
-                    IsReparsePoint = (dir.Attributes & FileAttributes.ReparsePoint) != 0,
+                    IsReparsePoint = link,
+                    SizeLabel = link ? "Shortcut" : "Checking…",
                     Modified = dir.LastWriteTime,
                     Icon = IconService.GetIcon(dir.FullName, isDirectory: true),
                 });
             }
             foreach (var file in EnumerateSafe(path, directories: false))
             {
+                if (!ListingRules.ShouldShow(file.Name, IsHidden(file), IsSystem(file), includeHidden))
+                    continue;
+                long size = file is FileInfo fi ? fi.Length : 0;
                 items.Add(new FileSystemItem
                 {
                     Name = file.Name,
                     FullPath = file.FullName,
                     IsDirectory = false,
                     IsReparsePoint = (file.Attributes & FileAttributes.ReparsePoint) != 0,
-                    Size = file is FileInfo fi ? fi.Length : 0,
+                    Size = size,
+                    SizeLabel = FolderSizeLabel.ByteText(size),
                     Modified = file.LastWriteTime,
                     Icon = IconService.GetIcon(file.FullName, isDirectory: false),
                 });
@@ -58,4 +68,7 @@ public static class BrowserService
             : new DirectoryInfo(path).EnumerateFiles();
         return query.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList(); // snapshot: enumerator would break on mid-run deletes
     }
+
+    private static bool IsHidden(FileSystemInfo info) => (info.Attributes & FileAttributes.Hidden) != 0;
+    private static bool IsSystem(FileSystemInfo info) => (info.Attributes & FileAttributes.System) != 0;
 }

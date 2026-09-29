@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
 using FastDelete.Core.Deletion;
 using FastDelete.Core.Enumeration;
 
@@ -18,7 +20,7 @@ public partial class ConfirmDeleteDialog : Window
         string what = targetCount == 1 ? "1 item" : $"{targetCount:N0} items";
         string sizeNote = totalBytes > 0 ? $" ({ViewModels.MainViewModel.FormatSize(totalBytes)})" : string.Empty;
 
-        PathList.Text = DeleteSafety.FormatPathList(targets);
+        ShowNames(targets);
         ConfirmButton.IsEnabled = false;
         ConfirmButton.IsDefault = false;
 
@@ -34,6 +36,8 @@ public partial class ConfirmDeleteDialog : Window
             Contents.Text = "Nothing will be deleted.";
             Warning.Text = guard.Explanation;
             ConfirmButton.Visibility = Visibility.Collapsed;
+            Grid.SetColumn(CancelButton, 0);
+            Grid.SetColumnSpan(CancelButton, 3);
             return;
         }
 
@@ -46,11 +50,12 @@ public partial class ConfirmDeleteDialog : Window
               "Moving to the Recycle Bin is slower for very large folders."
             : "⚠ These files will be gone for good — you CANNOT get them back from the Recycle Bin. " +
               "Please make sure you really want to do this. Shortcut links are removed safely, and other folders are never touched.";
-        ConfirmButton.Content = recycle ? "Yes, move to Recycle Bin" : "Yes, delete forever";
+        ConfirmText.Text = recycle ? "Yes, move to Recycle Bin" : "Yes, delete forever";
         if (!recycle)
         {
             ConfirmButton.Background = (System.Windows.Media.Brush)FindResource("Brush.Danger");
-            ConfirmButton.Foreground = System.Windows.Media.Brushes.White;
+            ConfirmButton.BorderThickness = new Thickness(0);
+            ConfirmText.Foreground = System.Windows.Media.Brushes.White;
         }
 
         // show what's really inside (recursive), so the warning means something.
@@ -83,6 +88,24 @@ public partial class ConfirmDeleteDialog : Window
                 }
             }
         });
+    }
+
+    private void ShowNames(IReadOnlyList<string> targets)
+    {
+        PathList.Inlines.Clear();
+        var names = DeleteSafety.ConfirmNames(targets);
+        for (int i = 0; i < names.Count; i++)
+        {
+            if (i > 0)
+                PathList.Inlines.Add(new LineBreak());
+            PathList.Inlines.Add(new Run(names[i].Name) { FontWeight = FontWeights.SemiBold, FontSize = 16 });
+            if (names[i].Location.Length > 0
+                && !names[i].Location.Equals(names[i].Name, StringComparison.OrdinalIgnoreCase))
+            {
+                PathList.Inlines.Add(new LineBreak());
+                PathList.Inlines.Add(new Run(names[i].Location) { FontSize = 13 });
+            }
+        }
     }
 
     private void ApplyCount(ConfirmCountState state, string text)

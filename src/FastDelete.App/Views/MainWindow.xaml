@@ -31,7 +31,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ===== top bar: plain-word navigation + the ONE big red button ===== -->
+        <!-- ===== top bar: the big button is Move to Recycle Bin ===== -->
         <Grid Grid.Row="0" Margin="8,8,8,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -67,24 +67,24 @@
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Select All" Click="SelectAll_Click" Padding="14,8" Margin="0,0,8,0"
-                        ToolTip="Select everything in this folder (same as Ctrl+A)"/>
-                <Button Click="DeleteButton_Click" Style="{StaticResource DeletePrimaryButton}"
+                        ToolTip="Pick everything in this folder"/>
+                <Button Click="DeleteRecycle_Click" Style="{StaticResource SafePrimaryButton}"
                         IsEnabled="{Binding HasSelection}"
-                        ToolTip="Delete the highlighted items permanently (or press the Delete key)">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" Margin="0,0,5,0"/>
-                        <TextBlock Text="{Binding DeleteLabel}"/>
-                    </StackPanel>
+                        ToolTip="Put the highlighted items in the Recycle Bin. You can get them back.">
+                    <TextBlock Text="{Binding RecycleLabel}"/>
                 </Button>
-                <Button Content="▾" Style="{StaticResource DeleteArrowButton}" ToolTip="More options">
+                <Button Content="Delete forever…" Click="DeleteButton_Click" Style="{StaticResource DeleteForeverButton}"
+                        IsEnabled="{Binding HasSelection}" Margin="8,0,0,0"
+                        ToolTip="Delete the highlighted items forever. You cannot get them back."/>
+                <Button Content="More" Padding="12,8" Margin="8,0,0,0" ToolTip="More choices" Click="More_Click">
                     <Button.ContextMenu>
                         <ContextMenu FontSize="14" Opened="OptionsMenu_Opened">
+                            <MenuItem x:Name="HiddenMenuItem" Header="Show hidden files and folders"
+                                      IsCheckable="True" Click="ToggleHidden_Click"/>
                             <MenuItem x:Name="ExplorerMenuItem" Header="Add “Delete with FastDelete” to the right-click menu in Windows"
                                       IsCheckable="True" Click="ToggleExplorerMenu_Click"/>
-                            <MenuItem Header="Open this folder in Windows Explorer"
+                            <MenuItem Header="Show this folder in Windows"
                                       Command="{Binding OpenInExplorerCommand}"/>
-                            <Separator/>
-                            <MenuItem Header="Move to Recycle Bin instead (slower, can be undone)" Click="DeleteRecycle_Click"/>
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
@@ -119,19 +119,20 @@
 
         <!-- ===== coaching hint, disappears once something is selected ===== -->
         <Border Grid.Row="2" Style="{StaticResource HintBanner}" Visibility="{Binding ShowHint, Converter={StaticResource BoolVis}}">
-            <StackPanel Orientation="Horizontal" Margin="10,6">
-                <TextBlock Text="Tip:" FontWeight="SemiBold" Margin="0,0,8,0"/>
-                <TextBlock TextWrapping="Wrap">
-                    <Run FontWeight="SemiBold">How to delete (same as in Windows):</Run>
-                    <Run>  1. Open the folder above  •  2. Click items to highlight them — hold </Run>
-                    <Run FontWeight="SemiBold">Ctrl</Run>
-                    <Run> to add one, </Run>
-                    <Run FontWeight="SemiBold">Shift</Run>
-                    <Run> for a range — or press </Run>
-                    <Run FontWeight="SemiBold">Select All</Run>
-                    <Run>  •  3. Press the red button</Run>
+            <StackPanel Margin="12,8">
+                <TextBlock TextWrapping="Wrap" FontSize="15">
+                    Click the files you want. Then press the big button, Move to Recycle Bin. You can get them back later.
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{DynamicResource Brush.ForegroundDim}">
+                    To pick everything here, press Select All. To pick a few, click one, then hold Ctrl and click the others. Hold Shift to pick a row of them.
                 </TextBlock>
             </StackPanel>
+        </Border>
+        <Border Grid.Row="2" Background="{DynamicResource Brush.Hint.Background}"
+                Visibility="{Binding PlaceWarning, Converter={StaticResource NotEmptyVis}}"
+                Padding="12,8">
+            <TextBlock Text="{Binding PlaceWarning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"/>
         </Border>
 
         <!-- ===== main content ===== -->
@@ -164,10 +165,11 @@
                           PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown">
                     <DataGrid.ContextMenu>
                         <ContextMenu FontSize="14">
-                            <MenuItem Header="Select all" Click="SelectAll_Click"/>
-                            <MenuItem Header="Open" Click="OpenItem_Click"/>
+                            <MenuItem Header="Move to Recycle Bin" Click="DeleteRecycle_Click"/>
+                            <MenuItem Header="Delete forever…" Click="DeleteButton_Click"/>
                             <Separator/>
-                            <MenuItem Header="Delete…" Click="DeleteButton_Click"/>
+                            <MenuItem Header="Open" Click="OpenItem_Click"/>
+                            <MenuItem Header="Select all in this folder" Click="SelectAll_Click"/>
                         </ContextMenu>
                     </DataGrid.ContextMenu>
                     <DataGrid.Columns>
@@ -181,7 +183,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource SizeConv}}" Width="100"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeLabel}" Width="110"/>
                         <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="110"/>
                         <DataGridTextColumn Header="Date changed" Binding="{Binding Modified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="140"/>
                     </DataGrid.Columns>
@@ -190,6 +192,19 @@
                            Visibility="{Binding EmptyMessage, Converter={StaticResource NotEmptyVis}}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            FontSize="16" Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                <Border Background="{DynamicResource Brush.Panel.Background}"
+                        Visibility="{Binding ShowWelcome, Converter={StaticResource BoolVis}}">
+                    <StackPanel MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+                        <TextBlock Text="Nothing of yours is open" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="16" Margin="0,12,0,0">
+                            Open your Downloads folder, or make a practice folder to learn the buttons. The practice folder is not your photos or documents.
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                            <Button Content="Open Downloads" Click="OpenDownloads_Click" Style="{StaticResource SafePrimaryButton}" Margin="0,0,12,0"/>
+                            <Button Content="Make a practice folder" Click="MakePractice_Click" Padding="16,8" FontSize="15"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Grid>
 

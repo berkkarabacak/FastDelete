@@ -3,7 +3,9 @@ using CommunityToolkit.Mvvm.Input;
 using FastDelete.App.Models;
 using TreeNode = FastDelete.App.Models.TreeNode;
 using FastDelete.App.Services;
+using FastDelete.Core;
 using FastDelete.Core.Deletion;
+using FastDelete.Core.Enumeration;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -45,9 +47,9 @@ public partial class MainViewModel : ObservableObject
     private long _selectedBytes;
 
     [ObservableProperty]
-    private string _deleteLabel = "Delete Selected";
+    private string _recycleLabel = "Move to Recycle Bin";
 
-    /// <summary>Whether anything is highlighted - the red button greys out otherwise.</summary>
+    /// <summary>Whether anything is highlighted. The big button stays grey until then.</summary>
     [ObservableProperty]
     private bool _hasSelection;
 
@@ -57,8 +59,14 @@ public partial class MainViewModel : ObservableObject
 
     private AppSettings _settings = SettingsService.Load();
 
-    /// <summary>One-line coaching banner, visible until the user selects something.</summary>
-    public bool ShowHint => SelectedCount == 0 && !IsDeleting;
+    /// <summary>Coaching banner, visible until the user selects something. Hidden on the welcome screen.</summary>
+    public bool ShowHint => SelectedCount == 0 && !IsDeleting && !ShowWelcome && string.IsNullOrEmpty(PlaceWarning);
+
+    /// <summary>First screen: nothing of the user's is open.</summary>
+    public bool ShowWelcome => string.IsNullOrEmpty(CurrentPath) && !IsDeleting;
+
+    /// <summary>Shown when the open folder is a whole drive or a Windows folder.</summary>
+    public string PlaceWarning => DeleteSafety.OpenFolderWarning(CurrentPath);
 
     /// <summary>Breadcrumb segments of the current folder (root + one per subfolder).</summary>
     public ObservableCollection<BreadcrumbSegment> Breadcrumbs { get; } = new();
@@ -85,6 +93,7 @@ public partial class MainViewModel : ObservableObject
     private string _deleteModeLabel = string.Empty;
 
     private CancellationTokenSource? _deleteCts;
+    private CancellationTokenSource? _measureCts;
     private PauseToken? _pauseToken;
     private int _loadGeneration; // stale loads (rapid navigation) must not overwrite newer ones
     private IReadOnlyList<FileSystemItem> _lastGridSelection = Array.Empty<FileSystemItem>();
@@ -130,17 +139,66 @@ public partial class MainViewModel : ObservableObject
             TreeRoots.Add(recent);
         }
 
+        // Drives stay collapsed under "This PC". They are not ordinary folders.
+        var thisPc = new TreeNode { Name = "This PC", FullPath = string.Empty };
         foreach (var drive in TreeService.GetDrives())
-            TreeRoots.Add(TreeNode.CreateRoot(drive));
+            thisPc.Children.Add(TreeNode.Create(TreeService.DriveLabel(drive), drive, IconService.GetIcon(drive, isDirectory: true)));
+        TreeRoots.Add(thisPc);
 
-        // restore the theme and come back to the last-used folder
+        // restore the theme. Open the last folder only when it is an ordinary one.
+        // A first run, the user profile, a drive, or a Windows folder stays on the welcome screen.
         IsDarkTheme = _settings.DarkTheme;
         if (IsDarkTheme)
             Themes.ThemeManager.Apply(dark: true);
-        string start = !string.IsNullOrEmpty(_settings.LastPath) && Directory.Exists(_settings.LastPath)
-            ? _settings.LastPath
-            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        Navigate(start);
+        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string? start = _settings.LastPath;
+        if (!string.IsNullOrEmpty(start) && Directory.Exists(start)
+            && !DeleteSafety.IsUnsafePlaceToOpenFirst(start, profile))
+            Navigate(start);
+        else
+            StatusText = "Nothing is open yet.";
+    }
+
+    partial void OnCurrentPathChanged(string value)
+    {
+        OnPropertyChanged(nameof(ShowWelcome));
+        OnPropertyChanged(nameof(ShowHint));
+        OnPropertyChanged(nameof(PlaceWarning));
+    }
+
+    partial void OnIsDeletingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowWelcome));
+        OnPropertyChanged(nameof(ShowHint));
+    }
+
+    public void OpenDownloads()
+    {
+        string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        if (!Directory.Exists(path))
+        {
+            StatusText = "The Downloads folder could not be found.";
+            return;
+        }
+        Navigate(path);
+    }
+
+    public void SetIncludeHidden(bool include)
+    {
+        TreeService.IncludeHidden = include;
+        if (!string.IsNullOrEmpty(CurrentPath))
+            LoadDirectory(CurrentPath);
+    }
+
+    /// <summary>Creates the practice folder and opens it. Does not touch photos or documents.</summary>
+    public void OpenPracticeFolder()
+    {
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string root = string.IsNullOrEmpty(local)
+            ? Path.Combine(Path.GetTempPath(), "FastDelete", "Practice")
+            : Path.Combine(local, "FastDelete", "Practice");
+        PracticeFolder.Create(root);
+        Navigate(root);
     }
 
     partial void OnSearchTextChanged(string value)
@@ -247,7 +305,8 @@ public partial class MainViewModel : ObservableObject
         int generation = ++_loadGeneration;
         StatusText = "Opening folder…";
 
-        var loaded = await Task.Run(() => BrowserService.LoadItems(path));
+        bool includeHidden = TreeService.IncludeHidden;
+        var loaded = await Task.Run(() => BrowserService.LoadItems(path, includeHidden));
         if (generation != _loadGeneration) return; // superseded by a newer navigation
 
         Items = new ObservableCollection<FileSystemItem>(loaded);
@@ -278,6 +337,46 @@ public partial class MainViewModel : ObservableObject
         {
             StatusText = _statusAfterLoad;
             _statusAfterLoad = null;
+        }
+
+        StartMeasuringFolders(generation, loaded.Where(i => i.IsDirectory && !i.IsReparsePoint).ToList());
+    }
+
+    private void StartMeasuringFolders(int generation, List<FileSystemItem> folders)
+    {
+        _measureCts?.Cancel();
+        _measureCts = new CancellationTokenSource();
+        if (folders.Count == 0)
+            return;
+        var token = _measureCts.Token;
+        _ = MeasureFoldersAsync(generation, folders, token);
+    }
+
+    private async Task MeasureFoldersAsync(int generation, List<FileSystemItem> folders, CancellationToken token)
+    {
+        foreach (var folder in folders)
+        {
+            if (generation != _loadGeneration || token.IsCancellationRequested)
+                return;
+            try
+            {
+                var stats = await TreeCounter.CountAsync(new[] { folder.FullPath }, token, cap: FolderSizeLabel.ItemCap);
+                if (generation != _loadGeneration || token.IsCancellationRequested)
+                    return;
+                folder.Size = stats.Bytes;
+                folder.SizeLabel = FolderSizeLabel.FromStats(stats.Bytes, stats.TotalItems);
+                if (_lastGridSelection.Contains(folder))
+                    UpdateSelection(_lastGridSelection);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                if (generation == _loadGeneration)
+                    folder.SizeLabel = "Could not check";
+            }
         }
     }
 
@@ -317,7 +416,7 @@ public partial class MainViewModel : ObservableObject
         Breadcrumbs.Clear();
         string? root = Path.GetPathRoot(path);
         if (string.IsNullOrEmpty(root)) return;
-        Breadcrumbs.Add(new BreadcrumbSegment(root.TrimEnd('\\', '/'), root, false));
+        Breadcrumbs.Add(new BreadcrumbSegment(DeleteSafety.DriveDisplayName(root), root, false));
         string rest = path[root.Length..].Trim('\\', '/');
         if (rest.Length > 0)
         {
@@ -359,7 +458,7 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateSelectionStatus()
     {
-        DeleteLabel = SelectedCount == 0 ? "Delete Selected" : $"Delete Selected ({SelectedCount:N0})";
+        RecycleLabel = SelectedCount == 0 ? "Move to Recycle Bin" : $"Move to Recycle Bin ({SelectedCount:N0})";
         if (SelectedCount == 0)
         {
             // keep folder summary; nothing else to do
@@ -419,12 +518,5 @@ public partial class MainViewModel : ObservableObject
         IsPaused = !IsPaused;
     }
 
-    public static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1L << 40 => $"{bytes / (double)(1L << 40):F2} TB",
-        >= 1L << 30 => $"{bytes / (double)(1L << 30):F2} GB",
-        >= 1L << 20 => $"{bytes / (double)(1L << 20):F2} MB",
-        >= 1L << 10 => $"{bytes / (double)(1L << 10):F1} KB",
-        _ => $"{bytes} B",
-    };
+    public static string FormatSize(long bytes) => FolderSizeLabel.ByteText(bytes);
 }

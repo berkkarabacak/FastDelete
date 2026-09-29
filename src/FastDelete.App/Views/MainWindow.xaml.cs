@@ -48,7 +48,7 @@ public partial class MainWindow : Window
         switch (e.Key)
         {
             case Key.Delete:
-                StartDelete(DeletionMode.Permanent);
+                StartDelete(DeletionMode.RecycleBin);
                 e.Handled = true;
                 break;
             case Key.F5:
@@ -177,6 +177,26 @@ public partial class MainWindow : Window
     private void OptionsMenu_Opened(object sender, RoutedEventArgs e)
     {
         ExplorerMenuItem.IsChecked = Services.ExplorerIntegration.IsEnabled;
+        HiddenMenuItem.IsChecked = Services.TreeService.IncludeHidden;
+    }
+
+    private void More_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu })
+            return;
+        menu.PlacementTarget = (System.Windows.Controls.Button)sender;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        Dispatcher.BeginInvoke(new Action(() => menu.IsOpen = true));
+    }
+
+    private void OpenDownloads_Click(object sender, RoutedEventArgs e) => VM.OpenDownloads();
+
+    private void MakePractice_Click(object sender, RoutedEventArgs e) => VM.OpenPracticeFolder();
+
+    private void ToggleHidden_Click(object sender, RoutedEventArgs e)
+    {
+        bool show = sender is System.Windows.Controls.MenuItem { IsChecked: true };
+        VM.SetIncludeHidden(show);
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
@@ -198,7 +218,7 @@ public partial class MainWindow : Window
         var targets = VM.ResolveDeleteTargets(_gridSelection);
         if (targets.Count == 0)
         {
-            VM.StatusText = "Nothing is selected — click items in the list first, or press Select All.";
+            VM.StatusText = "Click the files you want first.";
             return;
         }
 

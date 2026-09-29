@@ -60,7 +60,40 @@
     <Style TargetType="Border" x:Key="ProgressOverlayBackground">
         <Setter Property="Background" Value="{DynamicResource Brush.Overlay.Background}"/>
     </Style>
-    <!-- the one big red action -->
+    <!-- the big button: put things in the Recycle Bin -->
+    <Style TargetType="Button" x:Key="SafePrimaryButton">
+        <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="Padding" Value="18,8"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Style.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <!-- permanent delete stays available, smaller, and not the first button -->
+    <Style TargetType="Button" x:Key="DeleteForeverButton">
+        <Setter Property="Background" Value="{DynamicResource Brush.Control.Background}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Style.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <!-- kept for the confirm dialog's permanent button -->
     <Style TargetType="Button" x:Key="DeletePrimaryButton">
         <Setter Property="Background" Value="{DynamicResource Brush.Danger}"/>
         <Setter Property="Foreground" Value="White"/>

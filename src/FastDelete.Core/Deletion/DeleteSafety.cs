@@ -108,6 +108,90 @@ public static class DeleteSafety
         return new TargetGuard(false, blocked, Explain(blocked));
     }
 
+    /// <summary>
+    /// Folder name first, then where it is, so the confirm dialog shows the real name
+    /// and not only a count. Extra paths are counted in plain words.
+    /// </summary>
+    public static string FormatConfirmNames(IReadOnlyList<string> paths, int maxShown = 12)
+    {
+        var names = ConfirmNames(paths, maxShown);
+        if (names.Count == 0)
+            return "Nothing is selected.";
+        var blocks = new List<string>(names.Count);
+        foreach (var entry in names)
+        {
+            if (string.IsNullOrEmpty(entry.Location) || entry.Location.Equals(entry.Name, StringComparison.OrdinalIgnoreCase))
+                blocks.Add(entry.Name);
+            else
+                blocks.Add(entry.Name + Environment.NewLine + entry.Location);
+        }
+        return string.Join(Environment.NewLine + Environment.NewLine, blocks);
+    }
+
+    public readonly record struct ConfirmName(string Name, string Location);
+
+    public static IReadOnlyList<ConfirmName> ConfirmNames(IReadOnlyList<string> paths, int maxShown = 12)
+    {
+        if (paths.Count == 0)
+            return Array.Empty<ConfirmName>();
+
+        int shown = Math.Min(paths.Count, Math.Max(1, maxShown));
+        var list = new List<ConfirmName>(shown + 1);
+        for (int i = 0; i < shown; i++)
+        {
+            string canonical = Canonical(paths[i]);
+            if (canonical.Length == 0)
+                canonical = paths[i];
+            list.Add(new ConfirmName(FileOrFolderName(canonical), canonical));
+        }
+        if (paths.Count > shown)
+        {
+            int extra = paths.Count - shown;
+            list.Add(new ConfirmName(extra == 1 ? "and 1 more" : $"and {extra:N0} more", ""));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// True when opening this folder on startup would put a hidden profile, a whole
+    /// drive, or a Windows folder on screen. A normal folder such as Downloads is fine.
+    /// </summary>
+    public static bool IsUnsafePlaceToOpenFirst(string? path, string? userProfile)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return true;
+        if (!CheckTargets(new[] { path }).Allowed)
+            return true;
+        if (!string.IsNullOrWhiteSpace(userProfile)
+            && Canonical(path).Equals(Canonical(userProfile), StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+    /// <summary>"C:\" is shown as "C: drive" so it does not look like an ordinary folder name.</summary>
+    public static string DriveDisplayName(string root)
+    {
+        string canonical = Canonical(root);
+        if (canonical.Length == 3 && canonical[1] == ':' && canonical[2] == '\\')
+            return canonical[0] + ": drive";
+        return canonical.Length == 0 ? root : canonical;
+    }
+
+    /// <summary>Plain warning when the folder currently open should not be deleted. Empty when it is an ordinary folder.</summary>
+    public static string OpenFolderWarning(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return string.Empty;
+        string canonical = Canonical(path);
+        if (canonical.Length == 0)
+            return string.Empty;
+        if (IsVolumeRoot(canonical))
+            return "This is a whole drive. Open a folder inside it. The drive itself cannot be deleted.";
+        if (!CheckTargets(new[] { path }).Allowed)
+            return "This is a Windows folder. Open one of your own folders instead. FastDelete will not delete this one.";
+        return string.Empty;
+    }
+
     public static string Summarize(DeletionResult result)
     {
         if (result.WasCancelled)
@@ -174,6 +258,16 @@ public static class DeleteSafety
             + lines
             + Environment.NewLine + Environment.NewLine
             + "Cancel, then select a normal folder you really mean to delete.";
+    }
+
+    private static string FileOrFolderName(string canonical)
+    {
+        if (IsVolumeRoot(canonical))
+            return canonical;
+        int slash = canonical.LastIndexOf('\\');
+        if (slash >= 0 && slash < canonical.Length - 1)
+            return canonical[(slash + 1)..];
+        return canonical;
     }
 
     private static bool IsWellKnownSystemLocation(string canonical)
