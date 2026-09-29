@@ -91,6 +91,11 @@ public static class TreeCounter
                 catch (OperationCanceledException) when (walkCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested) { /* cap */ }
                 DoneRoot:
                 await walkerTask.ConfigureAwait(false);
+                // The user token and the linked walkCts fire together; if the walker's
+                // TryComplete() wins the race, the read loop exits normally and the
+                // cancellation would be silently swallowed (partial count returned as
+                // complete). Re-check here so user cancellation ALWAYS throws.
+                cancellationToken.ThrowIfCancellationRequested();
             }
 
             if (files + dirs + links >= cap)

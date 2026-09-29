@@ -99,10 +99,16 @@ public class TreeCounterTests : IDisposable
     public async Task Cancellation_aborts_promptly()
     {
         string root = NewRoot();
-        TestTree.MakeFiles(root, 2000, 10); // 20,000 files - counting takes well over 50ms
-        using var cts = new CancellationTokenSource(50);
+        TestTree.MakeFiles(root, 2000, 10); // 20,000 files
+        using var cts = new CancellationTokenSource();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => TreeCounter.CountAsync(new[] { root }, cts.Token));
+        // Machine-speed independent: cancel immediately after starting, while the
+        // count is guaranteed to still be running (20k real files cannot enumerate
+        // in microseconds). A fixed millisecond delay was flaky - a fast machine
+        // can finish the whole count before the timer fires.
+        Task<TreeStats> countTask = TreeCounter.CountAsync(new[] { root }, cts.Token);
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => countTask);
     }
 }
