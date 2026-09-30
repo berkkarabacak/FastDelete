@@ -83,7 +83,7 @@ public sealed class DeletionEngine
             });
 
         if (_options.Mode == DeletionMode.RecycleBin)
-            return RecycleBinDeleter.DeleteAsync(selectedPaths, cancellationToken);
+            return RecycleBinDeleter.DeleteAsync(selectedPaths, cancellationToken, pauseToken, progress);
 
         return DeletePermanentAsync(selectedPaths, progress, cancellationToken, pauseToken);
     }

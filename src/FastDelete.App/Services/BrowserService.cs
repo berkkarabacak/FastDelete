@@ -31,9 +31,9 @@ public static class BrowserService
                     FullPath = dir.FullName,
                     IsDirectory = true,
                     IsReparsePoint = link,
+                    IsHidden = IsHidden(dir) || IsSystem(dir) || dir.Name.StartsWith('.'),
                     SizeLabel = link ? "Shortcut" : "Checking…",
                     Modified = dir.LastWriteTime,
-                    Icon = IconService.GetIcon(dir.FullName, isDirectory: true),
                 });
             }
             foreach (var file in EnumerateSafe(path, directories: false))
@@ -47,10 +47,10 @@ public static class BrowserService
                     FullPath = file.FullName,
                     IsDirectory = false,
                     IsReparsePoint = (file.Attributes & FileAttributes.ReparsePoint) != 0,
+                    IsHidden = IsHidden(file) || IsSystem(file) || file.Name.StartsWith('.'),
                     Size = size,
                     SizeLabel = FolderSizeLabel.ByteText(size),
                     Modified = file.LastWriteTime,
-                    Icon = IconService.GetIcon(file.FullName, isDirectory: false),
                 });
             }
         }

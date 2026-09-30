@@ -11,6 +11,9 @@ public partial class FileSystemItem : ObservableObject
     public bool IsDirectory { get; init; }
     public bool IsReparsePoint { get; init; }
 
+    /// <summary>Shown with a Hidden mark, and only while More is ticked.</summary>
+    public bool IsHidden { get; init; }
+
     /// <summary>Known byte size. Null until a folder has been measured.</summary>
     [ObservableProperty]
     private long? _size;

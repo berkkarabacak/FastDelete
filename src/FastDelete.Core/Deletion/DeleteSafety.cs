@@ -168,6 +168,106 @@ public static class DeleteSafety
         return false;
     }
 
+    /// <summary>True when <paramref name="path"/> is a whole drive or a network share root.</summary>
+    public static bool IsDriveRoot(string? path)
+    {
+        string canonical = Canonical(path ?? "");
+        return canonical.Length > 0 && IsVolumeRoot(canonical);
+    }
+
+    public readonly record struct Crumb(string Name, string Path);
+
+    public readonly record struct NavPlaceRef(string Label, string Path);
+
+    /// <summary>
+    /// Plain crumbs: This PC, the person's name, then folder names.
+    /// A drive is "C: drive", not a folder name.
+    /// </summary>
+    public static IReadOnlyList<Crumb> Breadcrumbs(string? path, string? userProfile)
+    {
+        var list = new List<Crumb> { new("This PC", "") };
+        string canonical = Canonical(path ?? "");
+        if (canonical.Length == 0)
+            return list;
+
+        if (IsVolumeRoot(canonical))
+        {
+            list.Add(new Crumb(DriveDisplayName(canonical), canonical));
+            return list;
+        }
+
+        string profile = Canonical(userProfile ?? "");
+        if (profile.Length > 0 && !IsVolumeRoot(profile)
+            && (canonical.Equals(profile, StringComparison.OrdinalIgnoreCase)
+                || canonical.StartsWith(profile + "\\", StringComparison.OrdinalIgnoreCase)))
+        {
+            list.Add(new Crumb(FileOrFolderName(profile), profile));
+            if (canonical.Length > profile.Length)
+                AppendParts(list, profile, canonical[(profile.Length + 1)..]);
+            return list;
+        }
+
+        if (canonical.Length >= 3 && canonical[1] == ':')
+        {
+            string root = canonical[..3];
+            list.Add(new Crumb(DriveDisplayName(root), root));
+            if (canonical.Length > 3)
+                AppendParts(list, root, canonical[3..]);
+            return list;
+        }
+
+        list.Add(new Crumb(FileOrFolderName(canonical), canonical));
+        return list;
+    }
+
+    /// <summary>
+    /// Which left-hand place to highlight. A drive matches only when it is the open folder.
+    /// A known folder matches when it, or something inside it, is open. The longest match wins.
+    /// </summary>
+    public static string? ActiveNavLabel(string? currentPath, IReadOnlyList<NavPlaceRef> places)
+    {
+        string canonical = Canonical(currentPath ?? "");
+        if (canonical.Length == 0 || places.Count == 0)
+            return null;
+
+        string? folderLabel = null;
+        int folderLength = -1;
+        string? driveLabel = null;
+        foreach (var place in places)
+        {
+            string placePath = Canonical(place.Path);
+            if (placePath.Length == 0)
+                continue;
+            if (IsVolumeRoot(placePath))
+            {
+                if (canonical.Equals(placePath, StringComparison.OrdinalIgnoreCase))
+                    driveLabel = place.Label;
+                continue;
+            }
+
+            string trimmed = placePath.TrimEnd('\\');
+            bool match = canonical.Equals(trimmed, StringComparison.OrdinalIgnoreCase)
+                || canonical.StartsWith(trimmed + "\\", StringComparison.OrdinalIgnoreCase);
+            if (match && trimmed.Length > folderLength)
+            {
+                folderLabel = place.Label;
+                folderLength = trimmed.Length;
+            }
+        }
+
+        return folderLabel ?? driveLabel;
+    }
+
+    private static void AppendParts(List<Crumb> list, string parent, string rest)
+    {
+        string walk = parent;
+        foreach (string part in rest.Split('\\', StringSplitOptions.RemoveEmptyEntries))
+        {
+            walk = walk.TrimEnd('\\') + "\\" + part;
+            list.Add(new Crumb(part, walk));
+        }
+    }
+
     /// <summary>"C:\" is shown as "C: drive" so it does not look like an ordinary folder name.</summary>
     public static string DriveDisplayName(string root)
     {

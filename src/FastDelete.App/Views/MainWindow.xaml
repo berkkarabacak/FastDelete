@@ -3,8 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:FastDelete.App.ViewModels"
         xmlns:local="clr-namespace:FastDelete.App.Views"
-        Title="FastDelete" Width="1280" Height="800"
-        FontSize="14"
+        xmlns:core="clr-namespace:FastDelete.Core.Deletion;assembly=FastDelete.Core"
+        Title="FastDelete" Width="1100" Height="700"
+        MinWidth="880" MinHeight="560"
+        FontFamily="Archivo, Segoe UI" FontSize="17"
         Icon="/Assets/app.ico"
         WindowStartupLocation="CenterScreen"
         AllowDrop="True"
@@ -14,231 +16,420 @@
         <vm:MainViewModel/>
     </Window.DataContext>
     <Window.Resources>
-        <local:SizeConverter x:Key="SizeConv"/>
-        <local:CountConverter x:Key="CountConv"/>
         <BooleanToVisibilityConverter x:Key="BoolVis"/>
-        <local:BoolToBoldConverter x:Key="BoldConv"/>
-        <local:ThemeLabelConverter x:Key="ThemeLabel"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
         <local:NotEmptyToVisibilityConverter x:Key="NotEmptyVis"/>
+        <local:BoolToBoldConverter x:Key="BoldConv"/>
+        <local:ProgressWidthConverter x:Key="ProgressWidth"/>
     </Window.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <!-- ===== top bar: the big button is Move to Recycle Bin ===== -->
-        <Grid Grid.Row="0" Margin="8,8,8,4">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <ToolBarTray Grid.Column="0" HorizontalAlignment="Left">
-                <ToolBar>
-                    <Button Content="&#xE72B; Back" FontFamily="Segoe MDL2 Assets" ToolTip="Go back"
-                            Command="{Binding NavigateBackCommand}"/>
-                    <Button Content="&#xE72A; Forward" FontFamily="Segoe MDL2 Assets" ToolTip="Go forward"
-                            Command="{Binding NavigateForwardCommand}"/>
-                    <Button Content="&#xE70E; Up" FontFamily="Segoe MDL2 Assets" ToolTip="Go up one folder"
-                            Command="{Binding NavigateUpCommand}"/>
-                    <Button Content="&#xE72C; Refresh" FontFamily="Segoe MDL2 Assets" ToolTip="Reload this folder"
-                            Command="{Binding RefreshCommand}"/>
-                    <Separator/>
-                    <Button FontWeight="SemiBold" Click="BrowseFolder_Click"
-                            ToolTip="Pick any folder on this PC — you can then choose what to delete inside it">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Margin="0,0,4,0"/>
-                            <TextBlock Text="Delete a folder…"/>
-                        </StackPanel>
-                    </Button>
-                    <Separator/>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Find:" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBox Width="200" ToolTip="Type part of a name to filter the list"
-                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+        <!-- ===== first open: no tree, no drives, no real folders ===== -->
+        <Grid Visibility="{Binding ShowWelcome, Converter={StaticResource BoolVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0" Margin="64,64,64,0">
+                <TextBlock Text="{x:Static core:ScreenCopy.FirstTitle}" FontSize="52" FontWeight="ExtraBold"
+                           TextWrapping="Wrap" LineHeight="54"/>
+                <TextBlock Text="{x:Static core:ScreenCopy.FirstBody}" FontSize="21" TextWrapping="Wrap"
+                           MaxWidth="700" Margin="0,16,0,0"/>
+                <Grid Margin="0,48,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="2"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.ColumnSpan="3" BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="0,2,0,0" VerticalAlignment="Top"/>
+                    <StackPanel Grid.Column="0" Margin="0,32,32,0">
+                        <Button Content="Open Downloads" Click="OpenDownloads_Click" Style="{StaticResource InkButton}"
+                                Height="76" FontSize="24" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+                        <TextBlock Text="{x:Static core:ScreenCopy.FirstDownloadsHelp}" FontSize="18" TextWrapping="Wrap"
+                                   MaxWidth="420" Margin="0,16,0,0"/>
                     </StackPanel>
-                </ToolBar>
-            </ToolBarTray>
-
-            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Select All" Click="SelectAll_Click" Padding="14,8" Margin="0,0,8,0"
-                        ToolTip="Pick everything in this folder"/>
-                <Button Click="DeleteRecycle_Click" Style="{StaticResource SafePrimaryButton}"
-                        IsEnabled="{Binding HasSelection}"
-                        ToolTip="Put the highlighted items in the Recycle Bin. You can get them back.">
-                    <TextBlock Text="{Binding RecycleLabel}"/>
-                </Button>
-                <Button Content="Delete forever…" Click="DeleteButton_Click" Style="{StaticResource DeleteForeverButton}"
-                        IsEnabled="{Binding HasSelection}" Margin="8,0,0,0"
-                        ToolTip="Delete the highlighted items forever. You cannot get them back."/>
-                <Button Content="More" Padding="12,8" Margin="8,0,0,0" ToolTip="More choices" Click="More_Click">
-                    <Button.ContextMenu>
-                        <ContextMenu FontSize="14" Opened="OptionsMenu_Opened">
-                            <MenuItem x:Name="HiddenMenuItem" Header="Show hidden files and folders"
-                                      IsCheckable="True" Click="ToggleHidden_Click"/>
-                            <MenuItem x:Name="ExplorerMenuItem" Header="Add “Delete with FastDelete” to the right-click menu in Windows"
-                                      IsCheckable="True" Click="ToggleExplorerMenu_Click"/>
-                            <MenuItem Header="Show this folder in Windows"
-                                      Command="{Binding OpenInExplorerCommand}"/>
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
+                    <Border Grid.Column="1" Background="{DynamicResource Brush.Ink}" Margin="0,32,0,0"/>
+                    <StackPanel Grid.Column="2" Margin="32,32,0,0">
+                        <Button Content="Make a practice folder" Click="MakePractice_Click" Height="76" FontSize="24"
+                                FontWeight="ExtraBold" BorderThickness="2" BorderBrush="{DynamicResource Brush.Ink}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="28,0"/>
+                        <TextBlock Text="{x:Static core:ScreenCopy.FirstPracticeHelp}" FontSize="18" TextWrapping="Wrap"
+                                   MaxWidth="440" Margin="0,16,0,0"/>
+                    </StackPanel>
+                </Grid>
             </StackPanel>
+            <Border Grid.Row="1" BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="0,2,0,0" Padding="64,20">
+                <TextBlock Text="{x:Static core:ScreenCopy.FirstFooter}" FontSize="17" TextWrapping="Wrap"/>
+            </Border>
         </Grid>
 
-        <!-- ===== breadcrumb: where am I, in plain clickable pieces ===== -->
-        <Border Grid.Row="1" Background="{DynamicResource Brush.Toolbar.Background}"
-                BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="0,1"
-                Padding="8,3">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                <ItemsControl ItemsSource="{Binding Breadcrumbs}" Focusable="False">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="{Binding Name}" Tag="{Binding Path}" Click="Breadcrumb_Click"
-                                        FontWeight="{Binding IsLast, Converter={StaticResource BoldConv}}"
-                                        Style="{StaticResource BreadcrumbButton}"/>
-                                <TextBlock Text="›" Margin="2,0" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource Brush.ForegroundDim}"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </Border>
+        <!-- ===== main ===== -->
+        <Grid Visibility="{Binding ShowWelcome, Converter={StaticResource InvBoolVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-        <!-- ===== coaching hint, disappears once something is selected ===== -->
-        <Border Grid.Row="2" Style="{StaticResource HintBanner}" Visibility="{Binding ShowHint, Converter={StaticResource BoolVis}}">
-            <StackPanel Margin="12,8">
-                <TextBlock TextWrapping="Wrap" FontSize="15">
-                    Click the files you want. Then press the big button, Move to Recycle Bin. You can get them back later.
-                </TextBlock>
-                <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
-                           Foreground="{DynamicResource Brush.ForegroundDim}">
-                    To pick everything here, press Select All. To pick a few, click one, then hold Ctrl and click the others. Hold Shift to pick a row of them.
-                </TextBlock>
-            </StackPanel>
-        </Border>
-        <Border Grid.Row="2" Background="{DynamicResource Brush.Hint.Background}"
-                Visibility="{Binding PlaceWarning, Converter={StaticResource NotEmptyVis}}"
-                Padding="12,8">
-            <TextBlock Text="{Binding PlaceWarning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"/>
-        </Border>
+            <Border Grid.Row="0" BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="0,0,0,2" Padding="20,16,20,14">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Click="DeleteRecycle_Click" Style="{StaticResource InkButton}"
+                                IsEnabled="{Binding CanAct}" ToolTip="Put the highlighted items in the Recycle Bin. You can get them back.">
+                            <TextBlock Text="{Binding RecycleLabel}"/>
+                        </Button>
+                        <Button Grid.Column="1" Content="{x:Static core:ScreenCopy.DeleteForeverLabel}"
+                                Click="DeleteButton_Click" Style="{StaticResource QuietButton}"
+                                Margin="16,0,0,0" VerticalAlignment="Center"
+                                IsEnabled="{Binding CanAct}"
+                                ToolTip="Delete the highlighted items forever. You cannot get them back."/>
+                        <Button x:Name="MoreButton" Grid.Column="2" Content="More  ▾" Style="{StaticResource QuietButton}"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Click="More_Click"
+                                ToolTip="More choices"/>
+                    </Grid>
+                    <TextBlock Text="{x:Static core:ScreenCopy.Tip}" FontSize="17" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                    <TextBlock Text="{x:Static core:ScreenCopy.TipHint}" FontSize="13" Margin="0,2,0,0"
+                               Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                </StackPanel>
+            </Border>
 
-        <!-- ===== main content ===== -->
-        <Grid Grid.Row="3" Margin="8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" MinWidth="140"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <TreeView Grid.Column="0" ItemsSource="{Binding TreeRoots}"
-                      SelectedItemChanged="TreeView_SelectedItemChanged"
-                      FontSize="14">
-                <TreeView.ItemTemplate>
-                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                        <StackPanel Orientation="Horizontal">
-                            <Image Source="{Binding Icon}" Width="18" Height="18" Margin="0,1,4,1"/>
-                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </HierarchicalDataTemplate>
-                </TreeView.ItemTemplate>
-            </TreeView>
-
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
-
-            <Grid Grid.Column="2">
-                <DataGrid x:Name="FileGrid" ItemsSource="{Binding ItemsView}"
-                          SelectionChanged="DataGrid_SelectionChanged"
-                          MouseDoubleClick="DataGrid_MouseDoubleClick"
-                          PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown">
-                    <DataGrid.ContextMenu>
-                        <ContextMenu FontSize="14">
-                            <MenuItem Header="Move to Recycle Bin" Click="DeleteRecycle_Click"/>
-                            <MenuItem Header="Delete forever…" Click="DeleteButton_Click"/>
-                            <Separator/>
-                            <MenuItem Header="Open" Click="OpenItem_Click"/>
-                            <MenuItem Header="Select all in this folder" Click="SelectAll_Click"/>
-                        </ContextMenu>
-                    </DataGrid.ContextMenu>
-                    <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Name" Width="3*">
-                            <DataGridTemplateColumn.CellTemplate>
+            <Border Grid.Row="1" BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="0,0,0,1" Height="48">
+                <DockPanel Margin="20,0">
+                    <Button DockPanel.Dock="Left" Content="↑  Up" Click="Up_Click" Height="32" FontSize="14"
+                            FontWeight="SemiBold" Padding="8,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ItemCountLabel}" FontSize="14"
+                               Foreground="{DynamicResource Brush.ForegroundDim}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center">
+                        <ItemsControl ItemsSource="{Binding Breadcrumbs}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,1,5,1"/>
-                                        <TextBlock Text="{Binding Name}" Margin="2,0" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="›" Margin="6,0" VerticalAlignment="Center" FontSize="16"
+                                                   Foreground="{DynamicResource Brush.ForegroundDim}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Path}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <Button Content="{Binding Name}" Tag="{Binding Path}" Click="Breadcrumb_Click"
+                                                FontSize="17" BorderThickness="0" Background="Transparent" Padding="0,4"
+                                                FontWeight="{Binding IsLast, Converter={StaticResource BoldConv}}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="BorderThickness" Value="0"/>
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Setter Property="Padding" Value="0,4"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLast}" Value="False">
+                                                            <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
                                     </StackPanel>
                                 </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Size" Binding="{Binding SizeLabel}" Width="110"/>
-                        <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="110"/>
-                        <DataGridTextColumn Header="Date changed" Binding="{Binding Modified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="140"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-                <TextBlock Text="{Binding EmptyMessage}"
-                           Visibility="{Binding EmptyMessage, Converter={StaticResource NotEmptyVis}}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="16" Foreground="{DynamicResource Brush.ForegroundDim}"/>
-                <Border Background="{DynamicResource Brush.Panel.Background}"
-                        Visibility="{Binding ShowWelcome, Converter={StaticResource BoolVis}}">
-                    <StackPanel MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
-                        <TextBlock Text="Nothing of yours is open" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="16" Margin="0,12,0,0">
-                            Open your Downloads folder, or make a practice folder to learn the buttons. The practice folder is not your photos or documents.
-                        </TextBlock>
-                        <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
-                            <Button Content="Open Downloads" Click="OpenDownloads_Click" Style="{StaticResource SafePrimaryButton}" Margin="0,0,12,0"/>
-                            <Button Content="Make a practice folder" Click="MakePractice_Click" Padding="16,8" FontSize="15"/>
-                        </StackPanel>
-                    </StackPanel>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{DynamicResource Brush.Surface}"
+                        BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="0,0,2,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Places}" Margin="0,10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <TextBlock x:Name="Header" Text="{Binding Label}" Visibility="Collapsed"
+                                                   FontSize="11" Foreground="{DynamicResource Brush.ForegroundDim}"
+                                                   Margin="16,14,16,6"/>
+                                        <Button x:Name="Item" Click="Place_Click" Height="38" BorderThickness="0"
+                                                Background="Transparent" HorizontalContentAlignment="Left"
+                                                Padding="40,0,12,0" FontSize="16" Tag="{Binding FullPath}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="Glyph" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                                           Text="&#xE8B7;" Width="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsHeader}" Value="True">
+                                            <Setter TargetName="Header" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="Item" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsComputer}" Value="True">
+                                            <Setter TargetName="Item" Property="FontWeight" Value="ExtraBold"/>
+                                            <Setter TargetName="Item" Property="Padding" Value="16,0,12,0"/>
+                                            <Setter TargetName="Glyph" Property="Text" Value="&#xE211;"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsDrive}" Value="True">
+                                            <Setter TargetName="Glyph" Property="Text" Value="&#xEDA2;"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter TargetName="Item" Property="Background" Value="{DynamicResource Brush.Selected}"/>
+                                            <Setter TargetName="Item" Property="FontWeight" Value="ExtraBold"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </Border>
+
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Margin="20,16,20,4" Padding="20,16" Visibility="{Binding ShowDriveGuard, Converter={StaticResource BoolVis}}"
+                            Background="{DynamicResource Brush.Hover}" BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="2">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="i" FontWeight="ExtraBold" FontSize="20" Width="26" Margin="0,2,14,0"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding DriveGuardTitle}" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{x:Static core:ScreenCopy.DriveGuardBody}" FontSize="16" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Grid.Row="1">
+                        <DataGrid x:Name="FileGrid" ItemsSource="{Binding ItemsView}"
+                                  Visibility="{Binding HasRows, Converter={StaticResource BoolVis}}"
+                                  SelectionChanged="DataGrid_SelectionChanged"
+                                  MouseDoubleClick="DataGrid_MouseDoubleClick">
+                            <DataGrid.Resources>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FFD7D3D3"/>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF201E1D"/>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#FFD7D3D3"/>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF201E1D"/>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="" Width="64">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Width="26" Height="26" BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="2"
+                                                    HorizontalAlignment="Left" Margin="20,0,0,0" Background="Transparent">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource Brush.Ink}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="✓" Foreground="{DynamicResource Brush.Paper}" FontWeight="Bold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="NAME" Width="*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="20" Width="24" Margin="0,0,12,0"
+                                                           VerticalAlignment="Center" Text="&#xE8A5;">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="&#xE8A5;"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDirectory}" Value="True">
+                                                                    <Setter Property="Text" Value="&#xE8B7;"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Foreground}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsHidden}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource Brush.ForegroundDim}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <Border Margin="12,0,0,0" Padding="8,1" BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="1"
+                                                        VerticalAlignment="Center" Visibility="Collapsed">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsHidden}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="Hidden" FontSize="12" Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="SIZE" Width="170">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding SizeLabel}" FontSize="17" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SizeLabel}" Value="Very large">
+                                                                <Setter Property="FontWeight" Value="ExtraBold"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Open  ›" Click="OpenRow_Click" Height="34" FontSize="14" FontWeight="SemiBold"
+                                                    Padding="14,0,10,0" HorizontalAlignment="Left" Background="{DynamicResource Brush.Paper}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource QuietButton}">
+                                                        <Setter Property="Height" Value="34"/>
+                                                        <Setter Property="FontSize" Value="14"/>
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDirectory}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <StackPanel Margin="48,0,48,40" VerticalAlignment="Center"
+                                    Visibility="{Binding ShowEmpty, Converter={StaticResource BoolVis}}">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="40"
+                                       Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                            <TextBlock Text="{Binding EmptyTitle}" FontSize="30" FontWeight="ExtraBold" Margin="0,14,0,0"/>
+                            <TextBlock Text="{Binding EmptyBody}" FontSize="18" TextWrapping="Wrap" MaxWidth="440" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
             </Grid>
         </Grid>
 
-        <!-- ===== status bar ===== -->
-        <StatusBar Grid.Row="4" FontSize="13">
-            <StatusBarItem>
-                <TextBlock Text="{Binding StatusText}"/>
-            </StatusBarItem>
-            <StatusBarItem HorizontalAlignment="Right">
-                <Button Content="{Binding IsDarkTheme, Converter={StaticResource ThemeLabel}}"
-                        Command="{Binding ToggleThemeCommand}" Style="{StaticResource BreadcrumbButton}"/>
-            </StatusBarItem>
-        </StatusBar>
-
-        <!-- ===== progress overlay ===== -->
-        <Border Grid.RowSpan="5" Style="{StaticResource ProgressOverlayBackground}"
-                Visibility="{Binding IsDeleting, Converter={StaticResource BoolVis}}">
-            <Border Width="560" Padding="24" CornerRadius="8"
-                    Background="{DynamicResource Brush.Panel.Background}"
-                    BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="1"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel>
-                    <TextBlock Text="{Binding DeleteModeLabel}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
-                    <ProgressBar IsIndeterminate="True" Height="10" Margin="0,0,0,14"/>
-                    <TextBlock Text="{Binding ProgressCounters}" FontSize="14"/>
-                    <TextBlock Text="{Binding ProgressRate}" FontSize="12" Margin="0,4,0,0"
-                               Foreground="{DynamicResource Brush.ForegroundDim}"/>
-                    <TextBlock Text="{Binding ProgressCurrentItem}" FontSize="12" Margin="0,4,0,16"
-                               Foreground="{DynamicResource Brush.ForegroundDim}" TextTrimming="CharacterEllipsis"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="{Binding IsPaused, Converter={x:Static local:PauseLabelConverter.Instance}}" Command="{Binding TogglePauseCommand}" Margin="0,0,8,0"/>
-                        <Button Content="Cancel" Command="{Binding CancelDeleteCommand}"/>
+        <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreButton}" Placement="Bottom"
+               StaysOpen="False" AllowsTransparency="False" PopupAnimation="None">
+            <Border Width="360" Background="{DynamicResource Brush.Paper}" BorderBrush="{DynamicResource Brush.Ink}"
+                    BorderThickness="2" Margin="0,8,0,0" Padding="16">
+                <Button Click="ToggleHidden_Click" BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Left" Padding="0">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="24" Height="24" BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="2" Margin="0,0,14,0">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IncludeHidden}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.Ink}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="✓" Foreground="{DynamicResource Brush.Paper}" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="{Binding IncludeHidden, Converter={StaticResource BoolVis}}"/>
+                        </Border>
+                        <TextBlock Text="Show hidden files and folders" FontSize="17" VerticalAlignment="Center"/>
                     </StackPanel>
-                </StackPanel>
+                </Button>
+            </Border>
+        </Popup>
+
+        <!-- ===== working, paused ===== -->
+        <Border Style="{StaticResource ProgressOverlayBackground}"
+                Visibility="{Binding IsDeleting, Converter={StaticResource BoolVis}}">
+            <Border Width="620" Background="{DynamicResource Brush.Paper}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Height="8" Background="{DynamicResource Brush.Ink}"/>
+                    <StackPanel Margin="32">
+                        <TextBlock Text="{Binding WorkTitle}" FontSize="32" FontWeight="ExtraBold" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding WorkBody}" FontSize="19" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                        <Border Margin="0,28,0,0" Height="24" BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="2" Padding="2">
+                            <Grid>
+                                <Border Background="{DynamicResource Brush.Ink}" HorizontalAlignment="Left">
+                                    <Border.Width>
+                                        <MultiBinding Converter="{StaticResource ProgressWidth}">
+                                            <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="ActualWidth"/>
+                                            <Binding Path="WorkFraction"/>
+                                        </MultiBinding>
+                                    </Border.Width>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <DockPanel Margin="0,10,0,0">
+                            <TextBlock DockPanel.Dock="Left" Text="{Binding WorkCounter}" FontSize="17" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding WorkNow}" FontSize="17" Foreground="{DynamicResource Brush.ForegroundDim}"
+                                       TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" Margin="16,0,0,0"/>
+                        </DockPanel>
+                        <Grid Margin="0,28,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="{Binding WorkPauseLabel}" Command="{Binding TogglePauseCommand}"
+                                    Style="{StaticResource DialogLineButton}"/>
+                            <Button Grid.Column="2" Content="Stop" Command="{Binding CancelDeleteCommand}"
+                                    Style="{StaticResource DialogLineButton}"/>
+                        </Grid>
+                        <TextBlock Text="{Binding WorkNote}" FontSize="16" Margin="0,20,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Brush.ForegroundDim}"/>
+                    </StackPanel>
+                </DockPanel>
             </Border>
         </Border>
     </Grid>

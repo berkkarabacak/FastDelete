@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Documents;
 using FastDelete.Core.Deletion;
 using FastDelete.Core.Enumeration;
 
@@ -13,53 +12,56 @@ public partial class ConfirmDeleteDialog : Window
     private bool _blocked;
     private int _closed;
 
-    public ConfirmDeleteDialog(IReadOnlyList<string> targets, int targetCount, long totalBytes, DeletionMode mode)
+    public ConfirmDeleteDialog(IReadOnlyList<string> targets, DeletionMode mode, IReadOnlyList<ScreenItem>? named = null)
     {
         InitializeComponent();
-        bool recycle = mode == DeletionMode.RecycleBin;
-        string what = targetCount == 1 ? "1 item" : $"{targetCount:N0} items";
-        string sizeNote = totalBytes > 0 ? $" ({ViewModels.MainViewModel.FormatSize(totalBytes)})" : string.Empty;
+        Loaded += (_, _) => CancelButton.Focus();
 
-        ShowNames(targets);
+        var rows = named is { Count: > 0 }
+            ? named
+            : targets.Select(ScreenCopy.ItemFromPath).ToList();
+        var copy = ScreenCopy.Confirm(mode, rows);
+        NameList.ItemsSource = copy.Items;
+        Headline.Text = copy.Title;
+        Body.Text = copy.Body;
+        Body.FontWeight = copy.BodyStrong ? FontWeights.ExtraBold : FontWeights.Normal;
+        if (!string.IsNullOrEmpty(copy.Body2))
+        {
+            Body2.Text = copy.Body2;
+            Body2.Visibility = Visibility.Visible;
+        }
+        ListLabel.Text = copy.ListLabel.ToUpperInvariant();
+        ConfirmText.Text = copy.YesLabel;
+        CancelText.Text = copy.CancelLabel;
+        if (copy.UseRed)
+        {
+            Stripe.Background = (System.Windows.Media.Brush)FindResource("Brush.Danger");
+            ConfirmButton.Style = (Style)FindResource("DialogDangerButton");
+        }
+
         ConfirmButton.IsEnabled = false;
         ConfirmButton.IsDefault = false;
+        CountStatus.Text = ScreenCopy.CheckingLine;
 
         var guard = DeleteSafety.CheckTargets(targets);
         if (!guard.Allowed)
         {
             _blocked = true;
             _countState = ConfirmCountState.Finished;
-            Title = "These cannot be deleted";
-            Headline.Text = guard.BlockedPaths.Count == 1
-                ? "This cannot be deleted"
-                : "These cannot be deleted";
-            Contents.Text = "Nothing will be deleted.";
-            Warning.Text = guard.Explanation;
+            Title = "FastDelete";
+            Headline.Text = guard.BlockedPaths.Count == 1 ? "This cannot be deleted" : "These cannot be deleted";
+            Body.Text = guard.Explanation;
+            Body.FontWeight = FontWeights.Normal;
+            Body2.Visibility = Visibility.Collapsed;
+            CountStatus.Text = "Nothing will be deleted.";
+            NameList.ItemsSource = guard.BlockedPaths.Select(ScreenCopy.ItemFromPath).ToList();
+            ListLabel.Text = "CANNOT DELETE";
             ConfirmButton.Visibility = Visibility.Collapsed;
-            Grid.SetColumn(CancelButton, 0);
             Grid.SetColumnSpan(CancelButton, 3);
             return;
         }
 
-        Title = recycle ? "Move to Recycle Bin" : "Delete forever?";
-        Headline.Text = recycle
-            ? $"Move {what}{sizeNote} to the Recycle Bin?"
-            : $"Delete {what}{sizeNote} FOREVER?";
-        Warning.Text = recycle
-            ? "You can get these back later from the Recycle Bin if you change your mind. " +
-              "Moving to the Recycle Bin is slower for very large folders."
-            : "⚠ These files will be gone for good — you CANNOT get them back from the Recycle Bin. " +
-              "Please make sure you really want to do this. Shortcut links are removed safely, and other folders are never touched.";
-        ConfirmText.Text = recycle ? "Yes, move to Recycle Bin" : "Yes, delete forever";
-        if (!recycle)
-        {
-            ConfirmButton.Background = (System.Windows.Media.Brush)FindResource("Brush.Danger");
-            ConfirmButton.BorderThickness = new Thickness(0);
-            ConfirmText.Foreground = System.Windows.Media.Brushes.White;
-        }
-
-        // show what's really inside (recursive), so the warning means something.
-        // Yes stays off until this finishes or fails in plain sight.
+        Title = mode == DeletionMode.RecycleBin ? "Move to Recycle Bin" : "Delete forever?";
         _ = Task.Run(async () =>
         {
             try
@@ -67,9 +69,7 @@ public partial class ConfirmDeleteDialog : Window
                 var stats = await TreeCounter.CountAsync(targets, _countCts.Token, cap: 1_000_000);
                 string text = stats.TotalItems >= 1_000_000
                     ? "Contains more than 1,000,000 items."
-                    : $"Contains {stats.Files:N0} files, {stats.Directories:N0} folders" +
-                      (stats.Links > 0 ? $", {stats.Links:N0} shortcuts" : "") +
-                      (stats.Bytes > 0 ? $" — {ViewModels.MainViewModel.FormatSize(stats.Bytes)} in total" : "") + ".";
+                    : $"Contains {stats.Files:N0} files and {stats.Directories:N0} folders.";
                 await Dispatcher.InvokeAsync(() => ApplyCount(ConfirmCountState.Finished, text));
             }
             catch (OperationCanceledException)
@@ -90,33 +90,22 @@ public partial class ConfirmDeleteDialog : Window
         });
     }
 
-    private void ShowNames(IReadOnlyList<string> targets)
-    {
-        PathList.Inlines.Clear();
-        var names = DeleteSafety.ConfirmNames(targets);
-        for (int i = 0; i < names.Count; i++)
-        {
-            if (i > 0)
-                PathList.Inlines.Add(new LineBreak());
-            PathList.Inlines.Add(new Run(names[i].Name) { FontWeight = FontWeights.SemiBold, FontSize = 16 });
-            if (names[i].Location.Length > 0
-                && !names[i].Location.Equals(names[i].Name, StringComparison.OrdinalIgnoreCase))
-            {
-                PathList.Inlines.Add(new LineBreak());
-                PathList.Inlines.Add(new Run(names[i].Location) { FontSize = 13 });
-            }
-        }
-    }
-
     private void ApplyCount(ConfirmCountState state, string text)
     {
         if (Volatile.Read(ref _closed) != 0)
             return;
         _countState = state;
-        Contents.Text = text;
         bool ok = DeleteSafety.CanAccept(_countState, _blocked);
         ConfirmButton.IsEnabled = ok;
-        ConfirmButton.IsDefault = ok;
+        ConfirmButton.IsDefault = false;
+        if (state == ConfirmCountState.Finished)
+        {
+            CountStatus.Text = "";
+            CountStatus.Visibility = Visibility.Collapsed;
+            return;
+        }
+        CountStatus.Text = text;
+        CountStatus.Visibility = Visibility.Visible;
     }
 
     protected override void OnClosed(EventArgs e)
