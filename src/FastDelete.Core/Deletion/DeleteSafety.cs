@@ -79,6 +79,22 @@ public static class DeleteSafety
         return new RetryPlan(originalMode, paths, NeedsConfirmation: paths.Count > 0);
     }
 
+    /// <summary>Shown when a command-line run stops because nobody confirmed.</summary>
+    public const string CommandLineRefusedMessage =
+        "Nothing was deleted. FastDelete asks before it deletes anything, the same as in the window.";
+
+    /// <summary>
+    /// <c>--bench</c> permanently deletes. That is allowed only after the person
+    /// accepted the confirm dialog, and only for paths the window would allow.
+    /// A drive or a Windows folder stays refused even if a caller claims they said yes.
+    /// </summary>
+    public static bool MayPermanentlyDeleteFromCommandLine(bool personAccepted, IReadOnlyList<string>? paths)
+    {
+        if (!personAccepted || paths is null || paths.Count == 0)
+            return false;
+        return CheckTargets(paths).Allowed;
+    }
+
     public static TargetGuard CheckTargets(IReadOnlyList<string> paths)
         => CheckTargets(paths, DefaultProtectedDirectories());
 

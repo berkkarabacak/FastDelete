@@ -355,4 +355,36 @@ public class DeleteSafetyTests
         Assert.Equal(DeletionMode.RecycleBin, plan.Mode);
         Assert.Empty(plan.Paths);
     }
+
+    [Fact]
+    public void Command_line_permanent_delete_is_refused_until_the_person_confirms()
+    {
+        var folder = new[] { @"C:\Users\Mom\Downloads\old-photos" };
+
+        Assert.False(DeleteSafety.MayPermanentlyDeleteFromCommandLine(personAccepted: false, folder));
+        Assert.False(DeleteSafety.MayPermanentlyDeleteFromCommandLine(personAccepted: false, null));
+        Assert.False(DeleteSafety.MayPermanentlyDeleteFromCommandLine(personAccepted: true, Array.Empty<string>()));
+        Assert.Contains("Nothing was deleted", DeleteSafety.CommandLineRefusedMessage);
+        Assert.Contains("asks before", DeleteSafety.CommandLineRefusedMessage);
+    }
+
+    [Theory]
+    [InlineData(@"C:\")]
+    [InlineData(@"D:\")]
+    [InlineData(@"C:\Windows")]
+    [InlineData(@"C:\Windows\System32")]
+    [InlineData(@"C:\Program Files")]
+    [InlineData(@"C:\Program Files (x86)\App")]
+    public void Command_line_still_refuses_a_drive_or_windows_folder_after_a_yes(string path)
+    {
+        Assert.False(DeleteSafety.MayPermanentlyDeleteFromCommandLine(personAccepted: true, new[] { path }));
+    }
+
+    [Fact]
+    public void Command_line_may_delete_a_normal_folder_only_after_yes()
+    {
+        var folder = new[] { @"C:\Users\Mom\Downloads\old-photos" };
+
+        Assert.True(DeleteSafety.MayPermanentlyDeleteFromCommandLine(personAccepted: true, folder));
+    }
 }
