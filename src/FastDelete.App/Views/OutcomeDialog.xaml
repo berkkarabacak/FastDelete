@@ -1,4 +1,4 @@
-<Window x:Class="FastDelete.App.Views.ConfirmDeleteDialog"
+<Window x:Class="FastDelete.App.Views.OutcomeDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="FastDelete" Width="620" SizeToContent="Height"
@@ -9,34 +9,30 @@
         Background="{DynamicResource Brush.Paper}"
         Foreground="{DynamicResource Brush.Foreground}">
     <DockPanel>
-        <Border x:Name="Stripe" DockPanel.Dock="Top" Height="8" Background="{DynamicResource Brush.Ink}"/>
-        <Grid DockPanel.Dock="Bottom" Margin="32,24,32,32">
+        <Border DockPanel.Dock="Top" Height="8" Background="{DynamicResource Brush.Ink}"/>
+        <Grid DockPanel.Dock="Bottom" Margin="32,28,32,32">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="16"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Button x:Name="CancelButton" Grid.Column="0" Style="{StaticResource DialogLineButton}"
-                    IsCancel="True" Click="Cancel_Click" FocusVisualStyle="{StaticResource FocusRing}">
-                <TextBlock x:Name="CancelText" Text="Cancel, keep my files" TextWrapping="Wrap"/>
-            </Button>
-            <Button x:Name="ConfirmButton" Grid.Column="2" Style="{StaticResource DialogInkButton}"
-                    Click="Confirm_Click" IsEnabled="False" IsDefault="False">
-                <TextBlock x:Name="ConfirmText" TextWrapping="Wrap"/>
-            </Button>
+            <Button x:Name="PrimaryButton" Grid.Column="0" Style="{StaticResource DialogInkButton}" Click="Primary_Click"/>
+            <Button x:Name="CloseButton" Grid.Column="2" Content="Close" Style="{StaticResource DialogLineButton}"
+                    IsCancel="True" Click="Close_Click"/>
         </Grid>
         <StackPanel Margin="32,32,32,0">
+            <Border x:Name="CheckMark" Width="44" Height="44" HorizontalAlignment="Left" Margin="0,0,0,18"
+                    Background="{DynamicResource Brush.Ink}">
+                <TextBlock Text="✓" Foreground="{DynamicResource Brush.Paper}" FontSize="26" FontWeight="Bold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
             <TextBlock x:Name="Headline" FontSize="32" FontWeight="ExtraBold" TextWrapping="Wrap"/>
             <TextBlock x:Name="Body" FontSize="19" Margin="0,12,0,0" TextWrapping="Wrap"/>
-            <TextBlock x:Name="Body2" FontSize="18" Margin="0,6,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
-            <TextBlock x:Name="ListLabel" FontSize="12" Margin="0,20,0,0"
-                       Foreground="{DynamicResource Brush.ForegroundDim}"/>
-            <ScrollViewer MaxHeight="220" Margin="0,6,0,0" VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="ListHost" MaxHeight="220" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="NameList">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="0,0,0,1" Padding="4,8">
+                            <Border BorderBrush="{DynamicResource Brush.Control.Border}" BorderThickness="0,0,0,1" MinHeight="52" Padding="4,6">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Right" Text="{Binding Detail}" FontSize="15" Margin="12,0,0,0"
                                                Foreground="{DynamicResource Brush.ForegroundDim}" VerticalAlignment="Center"/>
@@ -48,8 +44,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-            <Border BorderBrush="{DynamicResource Brush.Ink}" BorderThickness="0,2,0,0" Margin="0,-1,0,0"/>
-            <TextBlock x:Name="CountStatus" FontSize="15" Margin="0,10,0,0" TextWrapping="Wrap"
+            <TextBlock x:Name="Note" FontSize="16" Margin="0,14,0,0" TextWrapping="Wrap"
                        Foreground="{DynamicResource Brush.ForegroundDim}"/>
         </StackPanel>
     </DockPanel>

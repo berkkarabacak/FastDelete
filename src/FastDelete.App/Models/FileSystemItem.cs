@@ -10,7 +10,18 @@ public partial class FileSystemItem : ObservableObject
     public required string FullPath { get; init; }
     public bool IsDirectory { get; init; }
     public bool IsReparsePoint { get; init; }
-    public long? Size { get; init; }            // null for directories
+
+    /// <summary>Shown with a Hidden mark, and only while More is ticked.</summary>
+    public bool IsHidden { get; init; }
+
+    /// <summary>Known byte size. Null until a folder has been measured.</summary>
+    [ObservableProperty]
+    private long? _size;
+
+    /// <summary>What the Size column shows: a size, "Checking…", "Empty", or "Very large".</summary>
+    [ObservableProperty]
+    private string _sizeLabel = "";
+
     public DateTime Modified { get; init; }
     public ImageSource? Icon { get; init; }
 

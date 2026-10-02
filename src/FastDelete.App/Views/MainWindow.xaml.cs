@@ -1,8 +1,6 @@
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Input;
 using FastDelete.App.Models;
 using FastDelete.App.ViewModels;
@@ -18,10 +16,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // restore window geometry from the last session
         var s = Services.SettingsService.Load();
-        Width = s.Width;
-        Height = s.Height;
+        Width = s.Width > 0 ? s.Width : 1100;
+        Height = s.Height > 0 ? s.Height : 700;
         if (!double.IsNaN(s.Left) && !double.IsNaN(s.Top))
         {
             Left = s.Left;
@@ -32,23 +29,23 @@ public partial class MainWindow : Window
 
         Closing += (_, _) =>
         {
-            var bounds = WindowState == WindowState.Maximized ? RestoreBounds : new System.Windows.Rect(Left, Top, Width, Height);
+            var bounds = WindowState == WindowState.Maximized ? RestoreBounds : new Rect(Left, Top, Width, Height);
             VM.PersistState(bounds.Width, bounds.Height, bounds.Left, bounds.Top, WindowState == WindowState.Maximized);
         };
     }
 
     private MainViewModel VM => (MainViewModel)DataContext;
 
-    /// <summary>Explorer-style keys, without stealing keys while typing in a text box.</summary>
     protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
     {
         base.OnKeyDown(e);
         if (Keyboard.FocusedElement is System.Windows.Controls.TextBox)
-            return; // let text editing work normally
+            return;
         switch (e.Key)
         {
             case Key.Delete:
-                StartDelete(DeletionMode.Permanent);
+                if (VM.CanAct)
+                    StartDelete(DeletionMode.RecycleBin);
                 e.Handled = true;
                 break;
             case Key.F5:
@@ -62,73 +59,33 @@ public partial class MainWindow : Window
         }
     }
 
-    private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    private void Up_Click(object sender, RoutedEventArgs e)
+        => VM.NavigateUpCommand.Execute(null);
+
+    private void Place_Click(object sender, RoutedEventArgs e)
     {
-        if (e.NewValue is Models.TreeNode node && !node.IsPlaceholder)
-            VM.NavigateCommand.Execute(node.FullPath);
+        if (sender is FrameworkElement { Tag: string path } && !string.IsNullOrWhiteSpace(path))
+            VM.NavigateCommand.Execute(path);
     }
 
     private void Breadcrumb_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: string path })
+        if (sender is FrameworkElement { Tag: string path } && !string.IsNullOrWhiteSpace(path))
             VM.NavigateCommand.Execute(path);
     }
 
-    private void SelectAll_Click(object sender, RoutedEventArgs e)
-        => FileGrid.SelectAll();
-
-    private void BrowseFolder_Click(object sender, RoutedEventArgs e)
+    private void More_Click(object sender, RoutedEventArgs e)
     {
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog
-        {
-            Description = "Choose the folder that has the files you want to delete, then click OK.",
-            UseDescriptionForTitle = true,
-            ShowNewFolderButton = false,
-        };
-        if (dialog.ShowDialog(new Win32WindowOwner(this)) == System.Windows.Forms.DialogResult.OK)
-            VM.NavigateCommand.Execute(dialog.SelectedPath);
+        MorePopup.DataContext = DataContext;
+        MorePopup.IsOpen = true;
     }
 
-    /// <summary>Explorer right-click behavior: right-clicking an unselected row selects just that row;
-    /// right-clicking inside an existing multi-selection keeps the whole selection. The context
-    /// menu is opened explicitly at the click position — PlacementMode.Mouse can land at the
-    /// physical cursor (stale with synthesized input), RelativePoint cannot.</summary>
-    private void DataGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.OriginalSource is not DependencyObject source) return;
-        var row = FindVisualParent<DataGridRow>(source);
-        if (row?.Item is FileSystemItem item && !FileGrid.SelectedItems.Contains(item))
-        {
-            FileGrid.SelectedItems.Clear();
-            FileGrid.SelectedItems.Add(item);
-        }
-        var position = e.GetPosition(FileGrid);
-        e.Handled = true; // suppress the default path - it would toggle the menu back shut
-        // Open after this click finishes, otherwise the right-button-UP handler closes it again.
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (FileGrid.ContextMenu is { } menu)
-            {
-                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.RelativePoint;
-                menu.PlacementTarget = FileGrid;
-                menu.HorizontalOffset = position.X;
-                menu.VerticalOffset = position.Y;
-                menu.IsOpen = true;
-            }
-        }));
-    }
+    private void OpenDownloads_Click(object sender, RoutedEventArgs e) => VM.OpenDownloads();
 
-    private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject
-    {
-        while (child is not null and not T)
-            child = System.Windows.Media.VisualTreeHelper.GetParent(child);
-        return child as T;
-    }
+    private void MakePractice_Click(object sender, RoutedEventArgs e) => VM.OpenPracticeFolder();
 
-    private sealed class Win32WindowOwner(System.Windows.Window window) : System.Windows.Forms.IWin32Window
-    {
-        public IntPtr Handle { get; } = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-    }
+    private void ToggleHidden_Click(object sender, RoutedEventArgs e)
+        => VM.IncludeHidden = !VM.IncludeHidden;
 
     private void DataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -142,41 +99,22 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)e.OriginalSource).DataContext is not FileSystemItem item)
             return;
+        OpenItem(item);
+    }
+
+    private void OpenRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: FileSystemItem item })
+            OpenItem(item);
+        e.Handled = true;
+    }
+
+    private void OpenItem(FileSystemItem item)
+    {
         if (item.IsDirectory)
             VM.NavigateCommand.Execute(item.FullPath);
         else
             Services.ExplorerIntegration.OpenFileWithDefaultApp(item.FullPath);
-    }
-
-    private void OpenItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (FileGrid.SelectedItem is not FileSystemItem item)
-            return;
-        if (item.IsDirectory)
-            VM.NavigateCommand.Execute(item.FullPath);
-        else
-            Services.ExplorerIntegration.OpenFileWithDefaultApp(item.FullPath);
-    }
-
-    private void ToggleExplorerMenu_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (Services.ExplorerIntegration.IsEnabled)
-                Services.ExplorerIntegration.Disable();
-            else
-                Services.ExplorerIntegration.Enable();
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, $"Could not change the Explorer menu:\n{ex.Message}",
-                "FastDelete", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    private void OptionsMenu_Opened(object sender, RoutedEventArgs e)
-    {
-        ExplorerMenuItem.IsChecked = Services.ExplorerIntegration.IsEnabled;
     }
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
@@ -195,42 +133,44 @@ public partial class MainWindow : Window
 
     private async void StartDelete(DeletionMode mode)
     {
-        var targets = VM.ResolveDeleteTargets(_gridSelection);
-        if (targets.Count == 0)
-        {
-            VM.StatusText = "Nothing is selected — click items in the list first, or press Select All.";
+        if (!VM.CanAct)
             return;
-        }
 
-        var confirm = new ConfirmDeleteDialog(targets, VM.SelectedCount, VM.SelectedBytes, mode) { Owner = this };
-        if (confirm.ShowDialog() != true) return;
+        var selected = _gridSelection.ToList();
+        var targets = selected.Select(i => i.FullPath).ToList();
+        if (targets.Count == 0)
+            return;
+
+        if (!ConfirmDelete(targets, mode, selected.Select(ToScreenItem).ToList()))
+            return;
 
         var result = await VM.DeleteAsync(targets, mode);
-        VM.RefreshCommand.Execute(null);
-        VM.SetStatusAfterLoad(result.Failures.Count == 0
-            ? $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds."
-            : $"Done — deleted {result.TotalItems:N0} items in {result.Elapsed.TotalSeconds:F1} seconds; {result.Failures.Count:N0} could not be deleted.");
-
-        if (result.Failures.Count > 0)
-        {
-            var report = new FailureReportDialog(result.Failures, mode) { Owner = this };
-            if (report.ShowDialog() == true && report.RetryPaths.Count > 0)
-            {
-                var retryResult = await VM.DeleteAsync(report.RetryPaths, DeletionMode.Permanent);
-                VM.RefreshCommand.Execute(null);
-                if (retryResult.Failures.Count > 0)
-                    _ = new FailureReportDialog(retryResult.Failures, DeletionMode.Permanent) { Owner = this }.ShowDialog();
-            }
-        }
+        await ShowOutcome(result, mode, allowRetry: true);
     }
-}
 
-/// <summary>Pause/resume button label.</summary>
-public sealed class PauseLabelConverter : IValueConverter
-{
-    public static readonly PauseLabelConverter Instance = new();
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is true ? "Resume" : "Pause";
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
+    private static ScreenItem ToScreenItem(FileSystemItem item)
+        => new(item.Name, item.IsDirectory ? ScreenCopy.FolderDetail : item.SizeLabel, item.IsDirectory);
+
+    private bool ConfirmDelete(IReadOnlyList<string> targets, DeletionMode mode, IReadOnlyList<ScreenItem>? named)
+    {
+        var confirm = new ConfirmDeleteDialog(targets, mode, named) { Owner = this };
+        return confirm.ShowDialog() == true;
+    }
+
+    private async Task ShowOutcome(DeletionResult result, DeletionMode mode, bool allowRetry)
+    {
+        VM.RefreshCommand.Execute(null);
+        var plan = DeleteSafety.PlanRetry(mode, result.Failures, result.WasCancelled);
+        var copy = ScreenCopy.DescribeOutcome(mode, result, plan, allowRetry);
+        VM.SetStatusAfterLoad(copy.Title);
+        var dialog = new OutcomeDialog(copy) { Owner = this };
+        if (dialog.ShowDialog() != true || !copy.IsRetry || plan.Paths.Count == 0)
+            return;
+
+        if (!ConfirmDelete(plan.Paths, plan.Mode, named: null))
+            return;
+
+        var retry = await VM.DeleteAsync(plan.Paths, plan.Mode);
+        await ShowOutcome(retry, plan.Mode, allowRetry: false);
+    }
 }

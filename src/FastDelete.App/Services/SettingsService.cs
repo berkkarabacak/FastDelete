@@ -7,8 +7,8 @@ namespace FastDelete.App.Services;
 public sealed record AppSettings(
     string? LastPath = null,
     bool DarkTheme = false,
-    double Width = 1280,
-    double Height = 800,
+    double Width = 1100,
+    double Height = 700,
     double Left = double.NaN,
     double Top = double.NaN,
     bool Maximized = false,

@@ -25,6 +25,12 @@ public sealed class DeletionOptions
     public bool UseDispositionEx { get; set; } = true;
     public DeletionMode Mode { get; set; } = DeletionMode.Permanent;
     public int ChannelCapacity { get; set; } = 16384;
+
+    /// <summary>
+    /// Test-only. Fires after a directory has been queued for the sequential pass
+    /// (it has not been deleted yet). Null in normal runs. Must not throw.
+    /// </summary>
+    internal Action<WorkItemKind, string>? TestOnlyAfterDirectoryQueued { get; set; }
 }
 
 public sealed class DeletionResult
@@ -77,7 +83,7 @@ public sealed class DeletionEngine
             });
 
         if (_options.Mode == DeletionMode.RecycleBin)
-            return RecycleBinDeleter.DeleteAsync(selectedPaths, cancellationToken);
+            return RecycleBinDeleter.DeleteAsync(selectedPaths, cancellationToken, pauseToken, progress);
 
         return DeletePermanentAsync(selectedPaths, progress, cancellationToken, pauseToken);
     }
@@ -96,26 +102,34 @@ public sealed class DeletionEngine
         // Normalize roots once; every work item originates from one of these roots.
         var roots = new List<RootEntry>(selectedPaths.Count);
         var seenCanonical = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var raw in selectedPaths.Distinct(StringComparer.OrdinalIgnoreCase))
+        bool wasCancelled = false;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            string prefixed = LongPath.Prefix(raw);
-            uint attrs = FileDeleter.GetAttributes(prefixed);
-            if (attrs == uint.MaxValue)
+            foreach (var raw in selectedPaths.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                failures.Add(prefixed, WorkItemKind.File, Marshal.GetLastWin32Error());
-                continue;
+                cancellationToken.ThrowIfCancellationRequested();
+                string prefixed = LongPath.Prefix(raw);
+                uint attrs = FileDeleter.GetAttributes(prefixed);
+                if (attrs == uint.MaxValue)
+                {
+                    failures.Add(prefixed, WorkItemKind.File, Marshal.GetLastWin32Error());
+                    continue;
+                }
+                string canonical = LongPath.NormalizeForCompare(prefixed);
+                if (!seenCanonical.Add(canonical))
+                    continue; // duplicate root (alias/casing)
+                roots.Add(new RootEntry(prefixed, attrs, canonical));
             }
-            string canonical = LongPath.NormalizeForCompare(prefixed);
-            if (!seenCanonical.Add(canonical))
-                continue; // duplicate root (alias/casing)
-            roots.Add(new RootEntry(prefixed, attrs, canonical));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            wasCancelled = true;
         }
 
-        if (roots.Count == 0)
+        if (wasCancelled || roots.Count == 0)
         {
             sw.Stop();
-            return BuildResult(counters, failures, sw.Elapsed, wasCancelled: false);
+            return BuildResult(counters, failures, sw.Elapsed, wasCancelled);
         }
 
         var channel = Channel.CreateBounded<DeleteWorkItem>(new BoundedChannelOptions(_options.ChannelCapacity)
@@ -174,6 +188,9 @@ public sealed class DeletionEngine
                     if (item.Kind == WorkItemKind.Directory)
                     {
                         deferredDirs.Enqueue(item);
+                        var queued = _options.TestOnlyAfterDirectoryQueued;
+                        if (queued != null)
+                            queued(item.Kind, LongPath.Display(item.Path));
                         Report(progress, counters, sw.Elapsed, lastItem, cancellationToken, final: false);
                         continue;
                     }
@@ -199,7 +216,6 @@ public sealed class DeletionEngine
             }
         }, CancellationToken.None)).ToArray();
 
-        bool wasCancelled = false;
         try
         {
             await Task.WhenAll(workerTasks).ConfigureAwait(false);
@@ -214,47 +230,70 @@ public sealed class DeletionEngine
             await walkersDone.ConfigureAwait(false);
         }
 
+        // Workers can finish in the same instant the user hits Stop, without throwing.
+        // Treat that as a cancel too, so we do not quietly finish the folders.
+        if (!wasCancelled && cancellationToken.IsCancellationRequested)
+            wasCancelled = true;
+
         // Sequential post-order deletion of ALL directories (see worker-loop comment).
         // First pass almost always succeeds because children precede parents; the round
         // loop only covers external TOCTOU (another process dropping files into a dir).
         if (!wasCancelled)
         {
-            for (int round = 0; round < MaxDirectoryRetryRounds && deferredDirs.TryPeek(out _); round++)
+            try
             {
-                int remaining = deferredDirs.Count;
-                for (int i = 0; i < remaining; i++)
+                for (int round = 0; round < MaxDirectoryRetryRounds && deferredDirs.TryPeek(out _); round++)
                 {
-                    if (!deferredDirs.TryDequeue(out var dir))
-                        break;
-                    cancellationToken.ThrowIfCancellationRequested();
-                    pauseToken?.WaitIfPaused(cancellationToken);
+                    int remaining = deferredDirs.Count;
+                    for (int i = 0; i < remaining; i++)
+                    {
+                        if (!deferredDirs.TryDequeue(out var dir))
+                            break;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        pauseToken?.WaitIfPaused(cancellationToken);
 
-                    var (status, error) = DeleteOne(dir);
-                    if (status == DeleteStatus.DirectoryNotEmpty)
-                    {
-                        deferredDirs.Enqueue(dir);
+                        var (status, error) = DeleteOne(dir);
+                        if (status == DeleteStatus.DirectoryNotEmpty)
+                        {
+                            deferredDirs.Enqueue(dir);
+                        }
+                        else if (status == DeleteStatus.Failed)
+                        {
+                            Interlocked.Increment(ref counters.Failed);
+                            failures.Add(dir.Path, dir.Kind, error);
+                        }
+                        else
+                        {
+                            counters.IncrementFor(dir.Kind);
+                            Report(progress, counters, sw.Elapsed, LongPath.Display(dir.Path), cancellationToken, final: false);
+                        }
                     }
-                    else if (status == DeleteStatus.Failed)
-                    {
-                        Interlocked.Increment(ref counters.Failed);
-                        failures.Add(dir.Path, dir.Kind, error);
-                    }
-                    else
-                    {
-                        counters.IncrementFor(dir.Kind);
-                        Report(progress, counters, sw.Elapsed, LongPath.Display(dir.Path), cancellationToken, final: false);
-                    }
+                    if (deferredDirs.IsEmpty)
+                        break;
                 }
-                if (deferredDirs.IsEmpty)
-                    break;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                wasCancelled = true;
             }
         }
 
-        // Whatever could not be emptied after all rounds is a failure.
-        while (deferredDirs.TryDequeue(out var leftover))
+        if (wasCancelled)
         {
-            failures.Add(leftover.Path, leftover.Kind, Win32.ERROR_DIR_NOT_EMPTY);
-            Interlocked.Increment(ref counters.Failed);
+            // The user stopped. Directories still queued were not finished on purpose.
+            // Recording them as "folder not empty" made Retry look like a one-click
+            // permanent finish of a delete they just cancelled. Drop them. Files
+            // already deleted stay deleted; real file failures stay in the report.
+            while (deferredDirs.TryDequeue(out _)) { }
+        }
+        else
+        {
+            // Whatever could not be emptied after all rounds is a failure.
+            while (deferredDirs.TryDequeue(out var leftover))
+            {
+                failures.Add(leftover.Path, leftover.Kind, Win32.ERROR_DIR_NOT_EMPTY);
+                Interlocked.Increment(ref counters.Failed);
+            }
         }
 
         sw.Stop();
