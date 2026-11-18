@@ -1,5 +1,8 @@
 # FastDelete
 
+[![CI](https://github.com/berkkarabacak/FastDelete/actions/workflows/ci.yml/badge.svg)](https://github.com/berkkarabacak/FastDelete/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Fast, safe, easy deletion of huge file selections on Windows — built for everyone, not just power users.**
 
 FastDelete is a polished Windows file manager built around one job: deleting very large
@@ -60,7 +63,7 @@ bash dn.sh run --project src/FastDelete.Benchmarks -- --profiles tiny10k,tiny100
 | `src/FastDelete.Core` | deletion engine library (Win32/NT interop, walker, strategies) |
 | `src/FastDelete.App` | the WPF GUI |
 | `src/FastDelete.Benchmarks` | throughput harness |
-| `tests/FastDelete.Core.Tests` | 18 xUnit tests |
+| `tests/FastDelete.Core.Tests` | 48 xUnit tests |
 | `tests/FastDelete.TestData` | deterministic tree generator |
 | `tools/make_icon.py` | regenerates the app icon |
 
@@ -68,3 +71,7 @@ bash dn.sh run --project src/FastDelete.Benchmarks -- --profiles tiny10k,tiny100
 
 ~2.2 s for 10,100 tiny files vs 5.6 s for PowerShell `Remove-Item` and 10.2 s for the
 Explorer delete verb (Recycle Bin) on the same machine.
+
+## License
+
+MIT - see [LICENSE](LICENSE).

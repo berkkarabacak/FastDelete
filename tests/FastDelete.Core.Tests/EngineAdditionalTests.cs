@@ -179,7 +179,10 @@ public class EngineAdditionalTests : IDisposable
         Assert.Single(listed);
         Assert.Equal("C:\\temp\\thing", listed[0].Path);          // no \\?\ prefix in display form
         Assert.False(string.IsNullOrWhiteSpace(listed[0].Message));
-        Assert.True(listed[0].Message.IndexOf("denied", StringComparison.OrdinalIgnoreCase) >= 0);
+        // Locale-agnostic: the message must be the OS text for that error code
+        // (English "Access is denied." on en-US, the localized equivalent elsewhere).
+        var expected = new System.ComponentModel.Win32Exception(Win32Shim.ERROR_ACCESS_DENIED).Message;
+        Assert.Equal(expected, listed[0].Message);
     }
 }
 

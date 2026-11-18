@@ -18,7 +18,7 @@ public sealed class DeletionOptions
 {
     public static readonly DeletionOptions Default = new();
 
-    /// <summary>0 = adaptive: clamp(ProcessorCount / 2, 2, 4) - see docs/benchmarks.md.</summary>
+    /// <summary>0 = adaptive: clamp(ProcessorCount / 2, 2, 8) - see docs/benchmarks.md.</summary>
     public int MaxDegreeOfParallelism { get; set; } = 0;
     /// <summary>DispositionEx as the fallback for locked/read-only files (normal files
     /// take the classic one-call path, measured ~2x faster on this class of hardware).</summary>
